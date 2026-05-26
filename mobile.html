@@ -1,0 +1,4235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Fehu · Mobile</title>
+<meta name="theme-color" content="#07091A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fehu">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+
+<!-- Fehu rune icons (inline SVG, also exposed as standalone icon-* files) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2307091A'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%2307091A'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='14' stroke-linecap='round'%3E%3Cline x1='58' y1='32' x2='58' y2='148'/%3E%3Cline x1='58' y1='58' x2='122' y2='40'/%3E%3Cline x1='58' y1='94' x2='122' y2='76'/%3E%3C/g%3E%3C/svg%3E">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<style>
+/* =====================================================
+   FEHU MOBILE — Brand Palette (dark-first, OLED-friendly)
+   ===================================================== */
+:root {
+  --bg:           #07091A;
+  --bg-elev:      #0B0F25;
+  --surface:      #11162E;
+  --surface-alt:  #161C38;
+  --surface-hi:   #1A2042;
+  --ink:          #F2EDE2;
+  --ink-soft:     #E8E0CC;
+  --ink-dim:      #A8AEC4;
+  --ink-mute:     #6C7290;
+  --line:         #232A4A;
+  --line-soft:    #1A1F3A;
+  --accent:       #D4A858;
+  --accent-deep:  #B88A3E;
+  --accent-soft:  #4A3E22;
+  --accent-glow:  rgba(212, 168, 88, 0.35);
+  --pos:          #5BC287;
+  --neg:          #E07466;
+  --pos-bg:       rgba(91, 194, 135, 0.14);
+  --neg-bg:       rgba(224, 116, 102, 0.14);
+  --shadow-card:  0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.35);
+  --shadow-pop:   0 20px 60px rgba(0,0,0,0.7);
+
+  /* Chart palette */
+  --c1: #7BA3D9;
+  --c2: #D4A858;
+  --c3: #9DBACF;
+  --c4: #D4A878;
+  --c5: #A8C5E0;
+  --c6: #E0BD6F;
+  --c7: #C5D9E8;
+  --c8: #B8B0A0;
+
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-height:  72px;
+
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans:  'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono:  'JetBrains Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overscroll-behavior-y: contain; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+}
+
+/* Subtle starfield + grain for atmosphere */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(212, 168, 88, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 90% 110%, rgba(123, 163, 217, 0.04), transparent 60%);
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+button, input, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: none; cursor: pointer; }
+input, textarea, select { background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+a { color: var(--accent); text-decoration: none; }
+
+/* =====================================================
+   APP SHELL
+   ===================================================== */
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+.app-header {
+  flex: 0 0 auto;
+  padding: calc(var(--safe-top) + 14px) 18px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(to bottom, var(--bg) 60%, rgba(7,9,26,0.85) 100%);
+  position: relative;
+  z-index: 5;
+}
+.app-header .rune {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-header .rune svg { width: 100%; height: 100%; }
+.app-header .titles { flex: 1; min-width: 0; }
+.app-header .brand {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.app-header .brand em {
+  font-style: italic;
+  color: var(--accent-deep);
+}
+.app-header .screen-title {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.app-header .h-actions {
+  display: flex;
+  gap: 6px;
+}
+.h-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+.h-btn:active { transform: scale(0.94); background: var(--surface-alt); }
+.h-btn.is-on { color: var(--accent); border-color: var(--accent-soft); }
+.h-btn .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--neg); display: inline-block;
+  margin-left: 3px;
+}
+.h-btn.is-on .dot { background: var(--pos); box-shadow: 0 0 8px var(--pos); }
+
+/* Main scroll container holds screens */
+.screens {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.screen {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 16px calc(var(--nav-height) + var(--safe-bottom) + 32px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(20px);
+  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.screen.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+.screen.is-prev {
+  transform: translateX(-12px);
+}
+
+/* Sub-screen overlays slide from right (detail views) */
+.subscreen {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.subscreen.is-open { transform: translateX(0); }
+.subscreen-header {
+  flex: 0 0 auto;
+  padding: calc(var(--safe-top) + 14px) 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(to bottom, var(--bg) 70%, rgba(7,9,26,0.6) 100%);
+}
+.subscreen-back {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.subscreen-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subscreen-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 16px calc(var(--safe-bottom) + 32px);
+}
+
+/* =====================================================
+   BOTTOM NAV (5 main tabs)
+   ===================================================== */
+.bottom-nav {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 50;
+  background: rgba(11, 15, 37, 0.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--line);
+  padding: 8px 8px calc(var(--safe-bottom) + 8px);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  color: var(--ink-mute);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 12px;
+  transition: color 0.18s, transform 0.12s;
+}
+.nav-btn .icon {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+}
+.nav-btn:active { transform: scale(0.93); }
+.nav-btn.is-active { color: var(--accent); }
+.nav-btn.is-active .icon {
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+.nav-btn.is-active .label::before {
+  content: '';
+  display: block;
+  width: 18px; height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 0 auto 4px;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* =====================================================
+   TOASTS / MODALS
+   ===================================================== */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 18px);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  width: calc(100% - 32px);
+  max-width: 380px;
+}
+.toast {
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-pop);
+  animation: toastIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast.is-pos { border-left-color: var(--pos); }
+.toast.is-neg { border-left-color: var(--neg); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.sheet-host {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.22s ease;
+}
+.sheet-host.is-open {
+  display: flex;
+  background: rgba(0, 0, 0, 0.55);
+}
+.sheet {
+  width: 100%;
+  max-height: 90vh;
+  background: var(--surface);
+  border-top-left-radius: 22px;
+  border-top-right-radius: 22px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  box-shadow: var(--shadow-pop);
+  padding: 8px 18px calc(var(--safe-bottom) + 24px);
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.sheet-host.is-open .sheet { transform: translateY(0); }
+.sheet-handle {
+  width: 38px; height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  margin: 8px auto 14px;
+}
+.sheet-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.sheet-sub {
+  font-size: 12px;
+  color: var(--ink-mute);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.sheet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+  gap: 12px;
+}
+.sheet-row:last-child { border-bottom: none; }
+.sheet-row .lbl { color: var(--ink-dim); font-size: 13px; }
+.sheet-row .val { color: var(--ink); font-family: var(--mono); font-size: 13px; text-align: right; }
+.sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* =====================================================
+   PRIMITIVES (buttons, chips, cards, KPIs)
+   ===================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  transition: transform 0.1s, background 0.15s, border-color 0.15s;
+}
+.btn:active { transform: scale(0.96); }
+.btn-primary {
+  background: var(--accent);
+  color: #0A0F1F;
+  border-color: var(--accent);
+}
+.btn-primary:active { background: var(--accent-deep); }
+.btn-ghost { background: transparent; }
+.btn-block { width: 100%; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+}
+.chip.is-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-deep); }
+.chip.is-pos { color: var(--pos); background: var(--pos-bg); border-color: rgba(91, 194, 135, 0.25); }
+.chip.is-neg { color: var(--neg); background: var(--neg-bg); border-color: rgba(224, 116, 102, 0.25); }
+
+.card {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg-elev) 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+.card-title {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.card-sub {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.muted { color: var(--ink-mute); }
+.dim   { color: var(--ink-dim); }
+.mono  { font-family: var(--mono); }
+.pos   { color: var(--pos); }
+.neg   { color: var(--neg); }
+.right { text-align: right; }
+.flex-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.mt-8 { margin-top: 8px; } .mt-12 { margin-top: 12px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; }
+.mb-8 { margin-bottom: 8px; } .mb-12 { margin-bottom: 12px; } .mb-16 { margin-bottom: 16px; }
+
+/* =====================================================
+   HOME SCREEN — Hero NAV
+   ===================================================== */
+.hero {
+  position: relative;
+  padding: 18px 4px 12px;
+  margin: 6px 0 14px;
+}
+.hero-label {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-label::before {
+  content: '';
+  width: 18px; height: 1px;
+  background: var(--accent);
+}
+.hero-nav {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(40px, 12vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.hero-nav .currency {
+  font-size: 0.5em;
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+.hero-delta {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-family: var(--mono);
+}
+.hero-delta .arrow { font-size: 11px; }
+
+/* Period selector */
+.period-bar {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0 6px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.period-bar button {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+.period-bar button.is-active {
+  background: var(--surface-hi);
+  color: var(--accent);
+}
+
+/* Chart canvas wrapper */
+.chart-wrap {
+  position: relative;
+  height: 220px;
+  margin: 6px 0 18px;
+}
+.chart-wrap canvas { height: 100% !important; width: 100% !important; }
+
+/* KPI strip — 2 cols */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 18px;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.kpi .k-lbl {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 4px;
+}
+.kpi .k-val {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.kpi .k-foot {
+  font-size: 11px;
+  color: var(--ink-dim);
+  margin-top: 4px;
+  font-family: var(--mono);
+}
+
+/* Section heading */
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 22px 4px 10px;
+}
+.sec-head h2 {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.sec-head .more {
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* Movement feed cards */
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.feed-icon {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex: 0 0 34px;
+}
+.feed-icon.claim { color: var(--accent); border-color: var(--accent-soft); }
+.feed-icon.add   { color: var(--pos); border-color: rgba(91,194,135,0.3); }
+.feed-icon.note  { color: var(--ink-dim); }
+.feed-body { flex: 1; min-width: 0; }
+.feed-title { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-meta { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+.feed-amt {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* =====================================================
+   PORTFOLIO SCREEN
+   ===================================================== */
+.pos-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.pos-card .stripe {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.pos-card .pos-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.pos-card .pos-name {
+  font-family: var(--serif);
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pos-card .pos-val {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.pos-card .pos-row2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.pos-card .pos-meta {
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+}
+.pos-card .pos-apy {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-weight: 600;
+}
+.pos-card:active { background: var(--surface-alt); }
+
+/* Position detail rows */
+.detail-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px 16px;
+  margin-bottom: 14px;
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  gap: 12px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-row .lbl { color: var(--ink-dim); }
+.detail-row .val { font-family: var(--mono); font-weight: 500; color: var(--ink); text-align: right; }
+
+.position-hero {
+  padding: 18px 4px 4px;
+  margin-bottom: 8px;
+}
+.position-hero .ph-protocol {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.position-hero .ph-name {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.position-hero .ph-value {
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-top: 14px;
+}
+.position-hero .ph-delta {
+  font-family: var(--mono);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* =====================================================
+   MARKETS
+   ===================================================== */
+.mk-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.mk-tabs button {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.mk-tabs button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-deep);
+}
+.mk-search {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.mk-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.mk-row .mk-name {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-row .mk-apy {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: right;
+}
+.mk-row .mk-meta {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+}
+.mk-row .mk-tvl {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  text-align: right;
+}
+
+/* =====================================================
+   AI Analyst
+   ===================================================== */
+.ai-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ai-msgs {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-msg {
+  max-width: 86%;
+  padding: 11px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.ai-msg.user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-bottom-right-radius: 4px;
+}
+.ai-msg.bot {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  border-bottom-left-radius: 4px;
+}
+.ai-msg.system {
+  align-self: center;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  font-style: italic;
+}
+.ai-input-bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+.ai-input-bar textarea {
+  flex: 1;
+  resize: none;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.ai-send {
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #0A0F1F;
+  font-size: 18px;
+  flex: 0 0 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-send:disabled { background: var(--surface-alt); color: var(--ink-mute); }
+.ai-quick {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 0 8px;
+}
+.ai-quick button {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* =====================================================
+   MORE menu
+   ===================================================== */
+.more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.more-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-align: left;
+  color: var(--ink);
+  min-height: 96px;
+  position: relative;
+}
+.more-tile:active { background: var(--surface-alt); }
+.more-tile .mt-icon {
+  font-size: 22px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+.more-tile .mt-title {
+  font-family: var(--serif);
+  font-size: 15.5px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+.more-tile .mt-sub {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+}
+
+/* Settings styled */
+.setting-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px 16px;
+  margin-bottom: 14px;
+}
+.setting-block h3 {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  padding: 13px 0 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.setting-block .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-soft);
+  gap: 10px;
+}
+.setting-block .row:last-child { border-bottom: none; }
+.setting-block label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin: 10px 0 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.setting-block input[type=text],
+.setting-block input[type=password],
+.setting-block input[type=number],
+.setting-block input[type=date],
+.setting-block textarea,
+.setting-block select {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: var(--mono);
+  margin-bottom: 4px;
+}
+
+/* Loading overlay */
+.loader {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  transition: opacity 0.4s ease;
+}
+.loader.fade-out { opacity: 0; pointer-events: none; }
+.loader-rune {
+  width: 64px; height: 64px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.loader-text {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent-deep);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.94); }
+  50%      { opacity: 1.0; transform: scale(1.0); }
+}
+
+/* Pull-to-refresh affordance */
+.ptr-indicator {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-30px);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 10;
+}
+.ptr-indicator.is-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.ptr-indicator.is-spin svg { animation: spin 0.9s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ink-mute);
+}
+.empty .e-rune {
+  font-family: var(--serif);
+  font-size: 48px;
+  color: var(--accent);
+  opacity: 0.5;
+  margin-bottom: 12px;
+}
+.empty .e-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.empty .e-text {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Disable text selection on UI chrome */
+.app-header, .bottom-nav, .nav-btn, .h-btn, .chip, .btn, .period-bar, .mk-tabs {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Small util */
+hr.line { border: none; height: 1px; background: var(--line-soft); margin: 12px 0; }
+
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div class="loader" id="loader">
+  <svg class="loader-rune" viewBox="0 0 100 100">
+    <g fill="none" stroke="#D4A858" stroke-width="6" stroke-linecap="round">
+      <line x1="32" y1="18" x2="32" y2="82"/>
+      <line x1="32" y1="32" x2="68" y2="22"/>
+      <line x1="32" y1="52" x2="68" y2="42"/>
+    </g>
+  </svg>
+  <div class="loader-text">Fehu <em>Invest</em></div>
+</div>
+
+<!-- APP SHELL -->
+<div class="app" id="app" style="opacity:0; transition: opacity 0.5s ease;">
+  <header class="app-header">
+    <div class="rune">
+      <svg viewBox="0 0 100 100">
+        <g fill="none" stroke="#D4A858" stroke-width="9" stroke-linecap="round">
+          <line x1="32" y1="18" x2="32" y2="82"/>
+          <line x1="32" y1="32" x2="68" y2="22"/>
+          <line x1="32" y1="52" x2="68" y2="42"/>
+        </g>
+      </svg>
+    </div>
+    <div class="titles">
+      <div class="brand">Fehu <em>Invest</em></div>
+      <div class="screen-title" id="screenTitle">Overview</div>
+    </div>
+    <div class="h-actions">
+      <button class="h-btn" id="syncBtn" onclick="manualSync()" title="Sync">⟳</button>
+      <button class="h-btn" id="cloudIndicator" onclick="openCloudStatus()" title="Cloud">☁<span class="dot" id="cloudDot"></span></button>
+    </div>
+  </header>
+
+  <main class="screens">
+    <!-- Screens are injected/managed by JS -->
+    <section class="screen is-active" id="screen-home"></section>
+    <section class="screen" id="screen-portfolio"></section>
+    <section class="screen" id="screen-markets"></section>
+    <section class="screen" id="screen-ai"></section>
+    <section class="screen" id="screen-more"></section>
+
+    <!-- Subscreen overlay (single, content swapped) -->
+    <section class="subscreen" id="subscreen">
+      <header class="subscreen-header">
+        <button class="subscreen-back" onclick="closeSubscreen()">‹</button>
+        <div class="subscreen-title" id="subscreenTitle">Details</div>
+      </header>
+      <div class="subscreen-body" id="subscreenBody"></div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn is-active" data-screen="home"><span class="icon">⌂</span><span class="label">Home</span></button>
+    <button class="nav-btn" data-screen="portfolio"><span class="icon">◈</span><span class="label">Portfolio</span></button>
+    <button class="nav-btn" data-screen="markets"><span class="icon">≣</span><span class="label">Markets</span></button>
+    <button class="nav-btn" data-screen="ai"><span class="icon">✦</span><span class="label">AI</span></button>
+    <button class="nav-btn" data-screen="more"><span class="icon">⋯</span><span class="label">More</span></button>
+  </nav>
+</div>
+
+<!-- Toast host -->
+<div class="toast-host" id="toastHost"></div>
+
+<!-- Bottom sheet -->
+<div class="sheet-host" id="sheetHost" onclick="if (event.target === this) closeSheet()">
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div id="sheetContent"></div>
+  </div>
+</div>
+
+
+<script>
+/* ===================================================================
+   FEHU MOBILE — Core
+   Storage compatible with desktop v35.1:
+     localStorage 'fehu_fund_v1'      (state JSON)
+     localStorage 'fehu_cloud_config_v1' (supabase url+key+secret)
+     Supabase table 'fund_state' (id='main', data jsonb, secret, updated_at)
+=================================================================== */
+
+const STORAGE_KEY       = 'fehu_fund_v1';
+const BACKUP_KEY        = 'fehu_fund_v1_backup';
+const CLOUD_CONFIG_KEY  = 'fehu_cloud_config_v1';
+const ANTHROPIC_KEY_K   = 'fehu_anthropic_api_key_v1';
+
+const PROTOCOL_COLORS = {
+  'Pendle':  '#D4A858',
+  'Uniswap': '#D4A878',
+  'Aave':    '#7BA3D9',
+  'Morpho':  '#9DBACF',
+  'Euler':   '#A8C5E0',
+  'GMX':     '#E0BD6F',
+  'Paradex': '#C5D9E8',
+  'Other':   '#B8B0A0'
+};
+
+let state = loadState();
+let activeScreen = 'home';
+let activePeriod = '30d';
+let homeChart = null;
+let currentPositionId = null;
+let lastSyncTime = null;
+
+/* ---------- Storage ---------- */
+function defaultState() {
+  return {
+    fund: {
+      manager: 'Founder',
+      inception: new Date().toISOString().slice(0,10),
+      strategy: 'DeFi · Multi-Protocol Yield',
+      manifesto: 'A private capital vehicle dedicated to yield generation.'
+    },
+    positions: [],
+    snapshots: [],
+    transactions: [],
+    distributions: [],
+    contributions: [],
+    idleTreasury: []
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      return normalizeState(p);
+    }
+    const bk = localStorage.getItem(BACKUP_KEY);
+    if (bk) return normalizeState(JSON.parse(bk));
+  } catch (e) { console.warn('loadState failed', e); }
+  return defaultState();
+}
+
+function normalizeState(s) {
+  if (!s.fund) s.fund = defaultState().fund;
+  if (!s.positions) s.positions = [];
+  if (!s.transactions) s.transactions = [];
+  if (!s.snapshots) s.snapshots = [];
+  if (!s.distributions) s.distributions = [];
+  if (!s.contributions) s.contributions = [];
+  if (!s.idleTreasury) s.idleTreasury = [];
+  return s;
+}
+
+/* ---------- Field readers (handle desktop v37 + legacy fallbacks) ---------- */
+function posAPY(p)        { return +(p.entryYield ?? p.apy) || 0; }
+function posEntryDate(p)  { return p.entryDate || p.inception || null; }
+function posType(p)       { return p.type || ''; }
+function posUnderlying(p) { return p.underlying || ''; }
+function posMaturity(p)   { return p.maturity || null; }
+function posRealizedPnl(p){ return +(p.realizedPnl) || 0; }
+
+function idleUsd(i)    { return +(i.usdValue ?? i.usd) || 0; }
+function idleAsset(i)  { return i.asset || i.symbol || 'Asset'; }
+function idleUnits(i)  { return +i.units || 0; }
+function idleNote(i)   { return i.note || ''; }
+
+function snapNav(s)    { return +(s.totalValue ?? s.nav) || 0; }
+function snapDate(s)   { return s.date || s.capturedAt || null; }
+function snapByPos(s)  { return s.byPosition || {}; }
+
+/* claim event reader — handles both old logClaimEvent style (type='claim-reward')
+   and new logTx style (action='claim' / type='claim') */
+function isClaimTx(tx) {
+  if (!tx) return false;
+  if (tx.type === 'claim-reward' || tx.type === 'claim') return true;
+  if (tx.action === 'claim') return true;
+  return false;
+}
+function claimAmount(tx) {
+  return +(tx.amount ?? tx.totalUsd ?? tx.usdValue) || 0;
+}
+function claimDate(tx) {
+  return tx.date || tx.timestamp || null;
+}
+function claimProtocol(tx) {
+  return tx.protocol || 'Other';
+}
+function claimRoute(tx) {
+  // Try explicit route field, then parse from note
+  let r = (tx.route || tx.destination || '').toString().toLowerCase();
+  if (!r && tx.note) {
+    const n = tx.note.toLowerCase();
+    if (n.includes('wallet')) r = 'wallet';
+    else if (n.includes('reinvest')) r = 'reinvest';
+    else if (n.includes('idle') || n.includes('treasury')) r = 'idle';
+    else if (n.includes('deploy') || n.includes('→ '+claimProtocol(tx).toLowerCase())) r = 'position';
+    else if (n.includes('new position') || n.includes('opening new')) r = 'new-position';
+  }
+  if (!r && tx.addedToIdle) r = 'idle';
+  if (r.includes('wallet')) return 'wallet';
+  if (r.includes('reinvest')) return 'reinvest';
+  if (r.includes('treasury') || r.includes('idle')) return 'idle';
+  if (r.includes('position') && r.includes('new')) return 'new-position';
+  if (r.includes('position') || r.includes('deploy')) return 'position';
+  return r || 'wallet';
+}
+
+function saveState() {
+  if (window._viewOnly) return;
+  try {
+    const json = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, json);
+    localStorage.setItem(BACKUP_KEY, json);
+  } catch (e) { console.error('saveState', e); }
+  scheduleCloudPush();
+}
+
+/* ---------- Formatting ---------- */
+function fmtUSD(v, withSign) {
+  v = +v || 0;
+  const sign = withSign && v > 0 ? '+' : '';
+  const neg = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1e6) return sign + neg + '$' + (abs/1e6).toFixed(2) + 'M';
+  if (abs >= 1e3) return sign + neg + '$' + (abs/1e3).toFixed(2) + 'K';
+  return sign + neg + '$' + abs.toFixed(2);
+}
+function fmtUSDFull(v) {
+  v = +v || 0;
+  return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtPct(v, withSign) {
+  v = +v || 0;
+  const sign = withSign && v > 0 ? '+' : '';
+  return sign + v.toFixed(2) + '%';
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtDateShort(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function fmtRelative(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3600_000) return Math.floor(diff/60_000) + 'm ago';
+  if (diff < 86_400_000) return Math.floor(diff/3_600_000) + 'h ago';
+  if (diff < 7*86_400_000) return Math.floor(diff/86_400_000) + 'd ago';
+  return fmtDateShort(iso);
+}
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------- Position math (matches desktop logic) ---------- */
+function positionValue(p) {
+  return (+p.currentValue || 0) + (+p.claimable || 0);
+}
+function computeNAV() {
+  return state.positions
+    .filter(p => p.status === 'active')
+    .reduce((s, p) => s + positionValue(p), 0);
+}
+function computeIdleTotal() {
+  return (state.idleTreasury || []).reduce((s, i) => s + idleUsd(i), 0);
+}
+function computeTotalNAV() {
+  return computeNAV() + computeIdleTotal();
+}
+function computeTotalDeposited() {
+  return state.positions
+    .filter(p => p.status === 'active')
+    .reduce((s, p) => s + (+p.deposited || +p.principal || 0), 0);
+}
+function computeWeightedAPY() {
+  const active = state.positions.filter(p => p.status === 'active');
+  const totalVal = active.reduce((s, p) => s + positionValue(p), 0);
+  if (totalVal === 0) return 0;
+  return active.reduce((s, p) => s + positionValue(p) * posAPY(p), 0) / totalVal;
+}
+function computeClaimable() {
+  return state.positions
+    .filter(p => p.status === 'active')
+    .reduce((s, p) => s + (+p.claimable || 0), 0);
+}
+
+function computeDeltaForPeriod(days) {
+  const snaps = (state.snapshots || []).slice().sort((a,b) => new Date(snapDate(a)) - new Date(snapDate(b)));
+  const now = computeTotalNAV();
+  if (snaps.length === 0) {
+    const dep = computeTotalDeposited();
+    return { from: dep, to: now, abs: now - dep, pct: dep ? (now - dep) / dep * 100 : 0 };
+  }
+  let cutoff;
+  if (days === 'all') {
+    cutoff = new Date(snapDate(snaps[0]));
+  } else {
+    cutoff = new Date(Date.now() - days * 86_400_000);
+  }
+  let base = snaps[0];
+  for (const s of snaps) {
+    if (new Date(snapDate(s)) <= cutoff) base = s;
+    else break;
+  }
+  const baseNav = snapNav(base);
+  return { from: baseNav, to: now, abs: now - baseNav, pct: baseNav ? (now - baseNav) / baseNav * 100 : 0 };
+}
+
+/* ---------- Toasts ---------- */
+function showToast(msg, kind) {
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'pos' ? ' is-pos' : kind === 'neg' ? ' is-neg' : '');
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(8px)'; }, 2400);
+  setTimeout(() => el.remove(), 2900);
+  if (navigator.vibrate) try { navigator.vibrate(kind === 'neg' ? [40,40,40] : 10); } catch(e) {}
+}
+
+/* ---------- Sheet ---------- */
+function openSheet(html) {
+  document.getElementById('sheetContent').innerHTML = html;
+  document.getElementById('sheetHost').classList.add('is-open');
+}
+function closeSheet() {
+  document.getElementById('sheetHost').classList.remove('is-open');
+}
+
+/* ---------- Subscreen ---------- */
+function openSubscreen(title, html) {
+  document.getElementById('subscreenTitle').textContent = title;
+  document.getElementById('subscreenBody').innerHTML = html;
+  document.getElementById('subscreen').classList.add('is-open');
+  document.getElementById('subscreen').scrollTop = 0;
+}
+function closeSubscreen() {
+  document.getElementById('subscreen').classList.remove('is-open');
+  setTimeout(() => {
+    document.getElementById('subscreenBody').innerHTML = '';
+    currentPositionId = null;
+  }, 300);
+}
+window.closeSubscreen = closeSubscreen;
+
+/* ---------- Screen routing ---------- */
+function switchScreen(name) {
+  if (activeScreen === name) return;
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('is-active', b.dataset.screen === name);
+  });
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('is-active', 'is-prev');
+    if (s.id === 'screen-' + name) s.classList.add('is-active');
+    else s.classList.add('is-prev');
+  });
+  activeScreen = name;
+  const titles = { home: 'Overview', portfolio: 'Portfolio', markets: 'Markets', ai: 'AI Analyst', more: 'More' };
+  document.getElementById('screenTitle').textContent = titles[name] || '';
+  // Render on demand
+  renderActiveScreen();
+  if (navigator.vibrate) try { navigator.vibrate(5); } catch(e) {}
+}
+function renderActiveScreen() {
+  if (activeScreen === 'home') renderHome();
+  else if (activeScreen === 'portfolio') renderPortfolio();
+  else if (activeScreen === 'markets') renderMarkets();
+  else if (activeScreen === 'ai') renderAI();
+  else if (activeScreen === 'more') renderMore();
+}
+
+document.querySelectorAll('.nav-btn').forEach(b => {
+  b.addEventListener('click', () => switchScreen(b.dataset.screen));
+});
+
+
+/* ===================================================================
+   HOME SCREEN
+=================================================================== */
+function renderHome() {
+  const nav = computeTotalNAV();
+  const liveNav = computeNAV();
+  const idle = computeIdleTotal();
+  const apy = computeWeightedAPY();
+  const claimable = computeClaimable();
+  const dep = computeTotalDeposited();
+  const totalPnL = liveNav - dep;
+  const totalPnLPct = dep ? (totalPnL / dep * 100) : 0;
+  const activeCount = state.positions.filter(p => p.status === 'active').length;
+
+  // Period delta
+  const days = activePeriod === '1d' ? 1 : activePeriod === '7d' ? 7 : activePeriod === '30d' ? 30 : activePeriod === '90d' ? 90 : 'all';
+  const delta = computeDeltaForPeriod(days);
+  const deltaCls = delta.abs >= 0 ? 'pos' : 'neg';
+  const deltaArrow = delta.abs >= 0 ? '▲' : '▼';
+
+  // Income for the period (sum of claim rewards within window)
+  const cutoff = days === 'all' ? 0 : Date.now() - days * 86_400_000;
+  const claimIncome = (state.transactions || [])
+    .filter(t => t.type === 'claim-reward' && new Date(t.date).getTime() >= cutoff)
+    .reduce((s, t) => s + (+t.amount || 0), 0);
+
+  // Recent feed (last 8 events)
+  const feed = buildRecentFeed(8);
+
+  const html = `
+    <div class="hero">
+      <div class="hero-label">Net Asset Value</div>
+      <div class="hero-nav">
+        ${fmtUSDFull(nav).replace(/\$/, '<span class="currency">$</span>')}
+      </div>
+      <div class="hero-delta">
+        <span class="${deltaCls}"><span class="arrow">${deltaArrow}</span> ${fmtUSD(Math.abs(delta.abs), false)}</span>
+        <span class="${deltaCls}">${fmtPct(delta.pct, true)}</span>
+        <span class="muted">· ${periodLabel(activePeriod)}</span>
+      </div>
+    </div>
+
+    <div class="period-bar" id="periodBar">
+      <button data-p="1d" ${activePeriod==='1d'?'class="is-active"':''}>1D</button>
+      <button data-p="7d" ${activePeriod==='7d'?'class="is-active"':''}>1W</button>
+      <button data-p="30d" ${activePeriod==='30d'?'class="is-active"':''}>1M</button>
+      <button data-p="90d" ${activePeriod==='90d'?'class="is-active"':''}>3M</button>
+      <button data-p="all" ${activePeriod==='all'?'class="is-active"':''}>All</button>
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="homeChart"></canvas>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">Active Positions</div>
+        <div class="k-val">${activeCount}</div>
+        <div class="k-foot">${(new Set(state.positions.filter(p=>p.status==='active').map(p=>p.protocol))).size} protocols</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Weighted APY</div>
+        <div class="k-val">${fmtPct(apy, false)}</div>
+        <div class="k-foot">target 5–15%</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Total P&amp;L</div>
+        <div class="k-val ${totalPnL>=0?'pos':'neg'}">${fmtUSD(totalPnL, true)}</div>
+        <div class="k-foot">${fmtPct(totalPnLPct, true)} since inception</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Claimable Now</div>
+        <div class="k-val ${claimable>0?'pos':''}">${fmtUSD(claimable, false)}</div>
+        <div class="k-foot">${idle > 0 ? 'Idle: ' + fmtUSD(idle, false) : 'no idle'}</div>
+      </div>
+    </div>
+
+    <div class="sec-head">
+      <h2>Recent Activity</h2>
+      <button class="more" onclick="switchScreen('more'); setTimeout(()=>openMore('journal'),100)">View all ›</button>
+    </div>
+    <div class="feed">
+      ${feed.length === 0 ?
+        '<div class="empty"><div class="e-rune">ᚠ</div><div class="e-title">No activity yet</div><div class="e-text">Claim events, deposits and snapshots will appear here.</div></div>'
+        : feed.map(renderFeedItem).join('')
+      }
+    </div>
+  `;
+  document.getElementById('screen-home').innerHTML = html;
+
+  // Wire period buttons
+  document.querySelectorAll('#periodBar button').forEach(b => {
+    b.addEventListener('click', () => {
+      activePeriod = b.dataset.p;
+      renderHome();
+      if (navigator.vibrate) try { navigator.vibrate(5); } catch(e) {}
+    });
+  });
+
+  // Render chart
+  renderHomeChart();
+}
+
+function periodLabel(p) {
+  return { '1d': 'last 24h', '7d': '7 days', '30d': '30 days', '90d': '90 days', 'all': 'inception' }[p] || '';
+}
+
+function buildRecentFeed(limit) {
+  const events = [];
+  (state.transactions || []).forEach(tx => {
+    if (isClaimTx(tx)) {
+      events.push({
+        date: claimDate(tx),
+        type: 'claim',
+        title: txTitle(tx),
+        meta: txMeta(tx),
+        amount: claimAmount(tx),
+        kind: 'claim'
+      });
+    } else if (tx.type === 'add-position' || tx.action === 'open') {
+      events.push({
+        date: tx.date || tx.timestamp,
+        type: 'add-position',
+        title: 'Opened ' + (tx.positionName || tx.asset || 'position'),
+        meta: txMeta(tx),
+        amount: +tx.amount || 0,
+        kind: 'add'
+      });
+    } else if (tx.type === 'close-position' || tx.action === 'close') {
+      events.push({
+        date: tx.date || tx.timestamp,
+        type: 'close-position',
+        title: 'Closed ' + (tx.positionName || tx.asset || 'position'),
+        meta: txMeta(tx),
+        amount: +tx.amount || 0,
+        kind: 'note'
+      });
+    } else {
+      // Generic tx (update, contribute, etc.)
+      const action = tx.action || tx.type;
+      if (!action) return;
+      events.push({
+        date: tx.date || tx.timestamp,
+        type: action,
+        title: txTitle(tx),
+        meta: txMeta(tx),
+        amount: +tx.amount || 0,
+        kind: 'note'
+      });
+    }
+  });
+  (state.contributions || []).forEach(c => {
+    events.push({
+      date: c.date,
+      type: 'contribution',
+      title: 'Capital contribution',
+      meta: c.note || 'New deposit',
+      amount: +(c.usdValue ?? c.amount) || 0,
+      kind: 'add'
+    });
+  });
+  (state.distributions || []).forEach(d => {
+    events.push({
+      date: d.date,
+      type: 'distribution',
+      title: 'Distribution',
+      meta: d.note || 'Cash out',
+      amount: -(Math.abs(+(d.usdValue ?? d.amount) || 0)),
+      kind: 'neg'
+    });
+  });
+  events.sort((a,b) => new Date(b.date) - new Date(a.date));
+  return events.slice(0, limit);
+}
+
+function txTitle(tx) {
+  if (isClaimTx(tx)) {
+    const proto = tx.protocol || '';
+    const asset = tx.asset || tx.positionName || tx.token || '';
+    if (proto && asset) return 'Claimed ' + proto + ' · ' + asset;
+    return 'Claimed ' + (proto || asset || 'rewards');
+  }
+  if (tx.action === 'open' || tx.type === 'add-position') return 'Opened ' + (tx.positionName || tx.asset || 'position');
+  if (tx.action === 'close' || tx.type === 'close-position') return 'Closed ' + (tx.positionName || tx.asset || 'position');
+  if (tx.action === 'update') return 'Updated ' + (tx.positionName || tx.asset || 'position');
+  if (tx.action === 'contribute') return 'Contributed';
+  return tx.action || tx.type || 'Event';
+}
+function txMeta(tx) {
+  const parts = [];
+  if (tx.protocol && tx.protocol !== '—') parts.push(tx.protocol);
+  if (tx.asset && tx.asset !== '—' && tx.asset !== tx.positionName) parts.push(tx.asset);
+  if (tx.token && !parts.includes(tx.token)) parts.push(tx.token);
+  if (tx.note) parts.push(tx.note);
+  return parts.join(' · ');
+}
+function txKind(tx) {
+  if (isClaimTx(tx)) return 'claim';
+  if (tx.action === 'open' || tx.type === 'add-position') return 'add';
+  return 'note';
+}
+
+function renderFeedItem(e) {
+  const icon = e.kind === 'claim' ? '✦' : e.kind === 'add' ? '+' : e.kind === 'neg' ? '–' : '·';
+  const amtCls = e.amount > 0 ? 'pos' : e.amount < 0 ? 'neg' : '';
+  const amtStr = e.amount !== 0 ? fmtUSD(e.amount, true) : '';
+  return `
+    <div class="feed-item">
+      <div class="feed-icon ${e.kind}">${icon}</div>
+      <div class="feed-body">
+        <div class="feed-title">${escapeHtml(e.title)}</div>
+        <div class="feed-meta">${escapeHtml(e.meta || '')} · ${fmtRelative(e.date)}</div>
+      </div>
+      <div class="feed-amt ${amtCls}">${amtStr}</div>
+    </div>
+  `;
+}
+
+function renderHomeChart() {
+  const ctx = document.getElementById('homeChart');
+  if (!ctx) return;
+  const snaps = (state.snapshots || []).slice().sort((a,b) => new Date(snapDate(a)) - new Date(snapDate(b)));
+
+  const days = activePeriod === '1d' ? 1 : activePeriod === '7d' ? 7 : activePeriod === '30d' ? 30 : activePeriod === '90d' ? 90 : null;
+  let data;
+  if (snaps.length === 0) {
+    // Synthesize a flat line at current NAV
+    const nav = computeTotalNAV();
+    const today = new Date();
+    data = [];
+    for (let i = (days || 30); i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86_400_000);
+      data.push({ x: d, y: nav });
+    }
+  } else {
+    let filtered = snaps;
+    if (days != null) {
+      const cutoff = Date.now() - days * 86_400_000;
+      filtered = snaps.filter(s => new Date(snapDate(s)).getTime() >= cutoff);
+      if (filtered.length === 0 || (snaps[0] && new Date(snapDate(snaps[0])).getTime() > cutoff && filtered[0] !== snaps[0])) {
+        const before = snaps.filter(s => new Date(snapDate(s)).getTime() < cutoff).pop();
+        if (before) filtered.unshift(before);
+      }
+    }
+    const last = filtered[filtered.length - 1];
+    const nowNav = computeTotalNAV();
+    data = filtered.map(s => ({ x: new Date(snapDate(s)), y: snapNav(s) }));
+    if (!last || snapNav(last) !== nowNav) data.push({ x: new Date(), y: nowNav });
+  }
+
+  if (homeChart) { homeChart.destroy(); homeChart = null; }
+  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
+  gradient.addColorStop(0, 'rgba(212, 168, 88, 0.32)');
+  gradient.addColorStop(1, 'rgba(212, 168, 88, 0.0)');
+
+  homeChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [{
+        data: data,
+        borderColor: '#D4A858',
+        backgroundColor: gradient,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#D4A858',
+        pointHoverBorderColor: '#11162E',
+        pointHoverBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      scales: {
+        x: { type: 'time', display: false, time: { tooltipFormat: 'MMM d' } },
+        y: { display: false, grace: '8%' }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#161C38',
+          borderColor: '#232A4A',
+          borderWidth: 1,
+          titleColor: '#A8AEC4',
+          bodyColor: '#F2EDE2',
+          padding: 10,
+          displayColors: false,
+          titleFont: { family: 'Inter', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 13, weight: '600' },
+          callbacks: {
+            title: (items) => {
+              const d = items[0].raw.x;
+              return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            },
+            label: (item) => fmtUSDFull(item.raw.y)
+          }
+        }
+      }
+    }
+  });
+}
+
+
+/* ===================================================================
+   PORTFOLIO SCREEN
+=================================================================== */
+function renderPortfolio() {
+  const active = state.positions.filter(p => p.status === 'active');
+  const closed = state.positions.filter(p => p.status !== 'active');
+
+  const totalActive = active.reduce((s,p) => s + positionValue(p), 0);
+
+  const html = `
+    <div class="hero" style="padding-top: 10px;">
+      <div class="hero-label">Portfolio Value</div>
+      <div class="hero-nav">
+        ${fmtUSDFull(totalActive).replace(/\$/, '<span class="currency">$</span>')}
+      </div>
+      <div class="hero-delta">
+        <span class="muted">${active.length} active · ${closed.length} closed</span>
+      </div>
+    </div>
+
+    <div class="sec-head">
+      <h2>Active Positions</h2>
+    </div>
+    ${active.length === 0
+      ? `<div class="empty"><div class="e-rune">ᚠ</div><div class="e-title">No active positions</div><div class="e-text">Add positions on desktop. They'll sync here automatically.</div></div>`
+      : active.map(renderPositionCard).join('')
+    }
+
+    ${closed.length > 0 ? `
+      <div class="sec-head" style="margin-top:24px">
+        <h2 style="color: var(--ink-dim)">Closed</h2>
+      </div>
+      ${closed.map(renderPositionCard).join('')}
+    ` : ''}
+  `;
+
+  document.getElementById('screen-portfolio').innerHTML = html;
+}
+
+function renderPositionCard(p) {
+  const val = positionValue(p);
+  const dep = +p.deposited || +p.principal || 0;
+  const realized = posRealizedPnl(p);
+  const pnl = (val - dep) + realized;
+  const apy = posAPY(p);
+  const stripe = PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other'];
+
+  const subtitle = [p.protocol, p.asset || posType(p), p.chain].filter(Boolean).join(' · ');
+  const status = p.status === 'active' ? '' : ' · closed';
+
+  return `
+    <button class="pos-card" onclick="openPositionDetail('${p.id}')">
+      <span class="stripe" style="background:${stripe}"></span>
+      <div class="pos-row1">
+        <div class="pos-name">${escapeHtml(p.asset || p.name || p.protocol)}</div>
+        <div class="pos-val">${fmtUSD(val, false)}</div>
+      </div>
+      <div class="pos-row2">
+        <span class="pos-meta">${escapeHtml(subtitle)}${status}</span>
+        <span class="pos-apy">${apy > 0 ? apy.toFixed(2)+'%' : ''}</span>
+      </div>
+      <div class="pos-row2" style="margin-top: 4px;">
+        <span class="pos-meta ${pnl>=0?'pos':'neg'}">${pnl >= 0 ? '+' : ''}${fmtUSD(pnl, false)} P&L</span>
+        ${p.claimable > 0 ? `<span class="chip is-pos">+${fmtUSD(p.claimable,false)} claimable</span>` : ''}
+      </div>
+    </button>
+  `;
+}
+
+function openPositionDetail(id) {
+  const p = state.positions.find(x => x.id === id);
+  if (!p) return;
+  currentPositionId = id;
+
+  const val = positionValue(p);
+  const dep = +p.deposited || +p.principal || 0;
+  const realized = posRealizedPnl(p);
+  const unrealized = val - dep;
+  const totalPnl = unrealized + realized;
+  const pnlPct = dep ? (totalPnl / dep * 100) : 0;
+  const claimable = +p.claimable || 0;
+  const apy = posAPY(p);
+  const entryDate = posEntryDate(p);
+  const maturity = posMaturity(p);
+  const stripe = PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other'];
+
+  // Recent claims for this position (handle both formats)
+  const claims = (state.transactions || [])
+    .filter(t => isClaimTx(t) && (
+      t.position === id ||
+      t.positionId === id ||
+      t.positionName === (p.asset || p.name)
+    ))
+    .sort((a,b) => new Date(claimDate(b)) - new Date(claimDate(a)))
+    .slice(0, 10);
+
+  const totalClaimed = claims.reduce((s, c) => s + claimAmount(c), 0);
+
+  const html = `
+    <div class="position-hero">
+      <div class="ph-protocol" style="color: ${stripe}">${escapeHtml(p.protocol || '')} ${posType(p) ? '· ' + escapeHtml(posType(p)) : ''}</div>
+      <div class="ph-name">${escapeHtml(p.asset || p.name || '')}</div>
+      <div class="ph-value">${fmtUSDFull(val)}</div>
+      <div class="ph-delta ${totalPnl>=0?'pos':'neg'}">
+        ${totalPnl >= 0 ? '▲' : '▼'} ${fmtUSD(Math.abs(totalPnl), false)} · ${fmtPct(pnlPct, true)}
+        ${realized > 0 ? `<span class="muted" style="font-family:var(--sans); font-size:11px; margin-left:8px">(realized: ${fmtUSD(realized,false)})</span>` : ''}
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">APY (entry)</div>
+        <div class="k-val">${apy>0?apy.toFixed(2)+'%':'—'}</div>
+        <div class="k-foot">${posUnderlying(p) || 'fixed/variable'}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Claimable</div>
+        <div class="k-val ${claimable>0?'pos':''}">${fmtUSD(claimable, false)}</div>
+        <div class="k-foot">${claimable > 0 ? 'ready to claim' : 'no rewards yet'}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Deposited</div>
+        <div class="k-val">${fmtUSD(dep, false)}</div>
+        <div class="k-foot">${entryDate ? fmtDate(entryDate) : '—'}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">${maturity ? 'Maturity' : 'Chain'}</div>
+        <div class="k-val" style="font-size:14px">${maturity ? fmtDate(maturity) : (p.chain || '—')}</div>
+        <div class="k-foot">${maturity ? daysToMaturity(maturity) : (p.protocol||'')}</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><h2>Details</h2></div>
+    <div class="detail-block">
+      ${p.protocol ? row('Protocol', escapeHtml(p.protocol)) : ''}
+      ${posType(p) ? row('Type', escapeHtml(posType(p))) : ''}
+      ${p.chain ? row('Chain', escapeHtml(p.chain)) : ''}
+      ${p.asset ? row('Asset', escapeHtml(p.asset)) : ''}
+      ${posUnderlying(p) ? row('Underlying', escapeHtml(posUnderlying(p))) : ''}
+      ${p.tokenAmount ? row('Token amount', (+p.tokenAmount).toLocaleString('en-US', {maximumFractionDigits: 6}) + ' ' + escapeHtml(p.tokenSymbol || '')) : ''}
+      ${p.entryPrice ? row('Entry price', '$' + (+p.entryPrice).toFixed(4)) : ''}
+      ${p.ptRedemption ? row('PT redemption', fmtUSD(p.ptRedemption, false)) : ''}
+      ${p.poolAddress ? row('Pool', shorten(p.poolAddress)) : ''}
+      ${p.wallet ? row('Wallet', shorten(p.wallet)) : ''}
+      ${p.notes ? row('Note', escapeHtml(p.notes)) : ''}
+      ${row('Status', escapeHtml(p.status || 'active'))}
+    </div>
+
+    ${claims.length > 0 ? `
+      <div class="sec-head">
+        <h2>Recent Claims</h2>
+        <span class="muted" style="font-size:12px">Total: ${fmtUSD(totalClaimed,false)}</span>
+      </div>
+      <div class="feed">
+        ${claims.map(c => {
+          const r = claimRoute(c);
+          const routeLabel = { wallet: '→ wallet', reinvest: '↻ reinvest', idle: '◯ idle', position: '⇉ position', 'new-position': '✦ new' }[r] || '';
+          return `
+          <div class="feed-item">
+            <div class="feed-icon claim">✦</div>
+            <div class="feed-body">
+              <div class="feed-title">${escapeHtml(c.token || c.asset || 'Reward')}</div>
+              <div class="feed-meta">${fmtRelative(claimDate(c))} · <span style="color: var(--accent)">${routeLabel}</span></div>
+            </div>
+            <div class="feed-amt pos">+${fmtUSD(claimAmount(c), false)}</div>
+          </div>
+        `;}).join('')}
+      </div>
+    ` : ''}
+
+    <div class="sec-head" style="margin-top:24px"><h2>Actions</h2></div>
+    <div style="display: grid; gap: 10px;">
+      ${claimable > 0 ? `
+        <button class="btn btn-primary btn-block" onclick="openClaimSheet('${p.id}')">
+          ✦ Claim ${fmtUSD(claimable, false)}
+        </button>
+      ` : `
+        <button class="btn btn-primary btn-block" onclick="openClaimSheet('${p.id}')">
+          ✦ Log a Claim
+        </button>
+      `}
+      <button class="btn btn-block" onclick="openEditValueSheet('${p.id}')">
+        ✎ Update Value
+      </button>
+      <div class="muted" style="font-size:11px; text-align:center; padding: 8px 12px; line-height: 1.5;">
+        Advanced edits (close, restructure, change protocol) — use desktop.
+      </div>
+    </div>
+  `;
+
+  openSubscreen(p.asset || p.name || 'Position', html);
+}
+window.openPositionDetail = openPositionDetail;
+
+function row(label, val) {
+  return `<div class="detail-row"><span class="lbl">${escapeHtml(label)}</span><span class="val">${val}</span></div>`;
+}
+function shorten(addr) {
+  if (!addr || addr.length < 10) return addr;
+  return addr.slice(0, 6) + '…' + addr.slice(-4);
+}
+function daysToMaturity(iso) {
+  if (!iso) return '';
+  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return Math.abs(days) + ' days past';
+  if (days === 0) return 'today';
+  if (days <= 30) return days + ' days';
+  if (days <= 365) return Math.round(days/30) + ' months';
+  return (days/365).toFixed(1) + ' years';
+}
+
+/* ---------- New Claim flow with 5 routes (matches desktop v37) ---------- */
+let claimDraft = null; // { positionId, amount, route, ... }
+
+function openClaimSheet(positionId) {
+  const p = state.positions.find(x => x.id === positionId);
+  if (!p) return;
+  // Pre-fill amount with current claimable if any
+  claimDraft = {
+    positionId: positionId,
+    amount: +p.claimable || 0,
+    route: null,
+    targetPositionId: null,
+    treasuryMode: 'single',
+    treasuryAsset: 'USDC',
+    splitAssetA: 'ETH', splitUsdA: 0, splitUnitsA: 0,
+    splitAssetB: 'USDC', splitUsdB: 0, splitUnitsB: 0,
+    note: '',
+    token: ''
+  };
+  renderClaimSheet();
+}
+window.openClaimSheet = openClaimSheet;
+
+function renderClaimSheet() {
+  const p = state.positions.find(x => x.id === claimDraft.positionId);
+  if (!p) return closeSheet();
+
+  const stripe = PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other'];
+  const amount = claimDraft.amount;
+  const otherPositions = state.positions.filter(x => x.status === 'active' && x.id !== p.id);
+
+  const html = `
+    <div class="sheet-title">Claim from ${escapeHtml(p.asset || p.name || p.protocol)}</div>
+    <div class="sheet-sub" style="color: ${stripe}">${escapeHtml(p.protocol || '')} · ${escapeHtml(p.chain || '')}</div>
+
+    <!-- Amount input -->
+    <div style="margin: 14px 0 18px;">
+      <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Claim amount (USD)</label>
+      <input id="cdAmount" type="number" step="0.01" value="${amount > 0 ? amount.toFixed(2) : ''}" placeholder="0.00"
+        oninput="claimDraft.amount = +this.value || 0; refreshClaimPreview()"
+        style="width:100%; padding:14px; border-radius:12px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size:22px; font-weight:600; margin-top:6px; text-align:right;">
+      <div class="muted" style="font-size:11px; margin-top:6px; line-height: 1.5;">
+        Position has <strong style="color:var(--accent)">${fmtUSD(+p.claimable || 0, false)}</strong> claimable
+        ${(+p.claimable || 0) > 0 ? `<button onclick="useFullClaimable()" style="background:var(--accent-soft); color:var(--accent); padding:3px 8px; border-radius:6px; margin-left:6px; font-size:11px; font-weight:600">use full</button>` : ''}
+      </div>
+    </div>
+
+    <!-- Route selector -->
+    <div style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase; margin-bottom: 8px;">
+      Where did the rewards go?
+    </div>
+
+    <div style="display: grid; gap: 8px; margin-bottom: 16px;">
+      ${routeOption('wallet', '→ Wallet', 'Cashed out as profit', 'Position keeps principal, rewards reset.')}
+      ${routeOption('reinvest', '↻ Reinvest', 'Compounded into same position', 'Adds to principal and current value.')}
+      ${routeOption('position', '⇉ Other position', 'Deployed into another existing position', otherPositions.length === 0 ? 'No other active positions.' : '')}
+      ${routeOption('treasury', '◯ Idle treasury', 'Kept in fund idle pool', 'Single asset or split (LP fees).')}
+      ${routeOption('new-position', '✦ Log only', 'Will open new position on desktop', 'Mobile records the claim; create position on MacBook.')}
+    </div>
+
+    <!-- Conditional sub-config based on route -->
+    <div id="claimSubConfig">
+      ${renderClaimSubConfig()}
+    </div>
+
+    <!-- Note -->
+    <div style="margin: 14px 0 8px;">
+      <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Note (optional)</label>
+      <input id="cdNote" type="text" placeholder="Quarterly rewards, etc." value="${escapeHtml(claimDraft.note || '')}"
+        oninput="claimDraft.note = this.value"
+        style="width:100%; padding:11px 13px; border-radius:10px; background:var(--surface-alt); border:1px solid var(--line); margin-top:6px;">
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn" onclick="closeSheet()">Cancel</button>
+      <button class="btn btn-primary" id="cdConfirmBtn" onclick="confirmClaim()" ${!claimDraft.route || claimDraft.amount <= 0 ? 'disabled style="opacity:0.4"' : ''}>Confirm</button>
+    </div>
+  `;
+  openSheet(html);
+}
+
+function routeOption(routeId, title, subtitle, hint) {
+  const isActive = claimDraft.route === routeId;
+  return `
+    <button onclick="selectClaimRoute('${routeId}')" class="claim-route-btn"
+      style="text-align:left; padding:12px 14px; border-radius:12px; border:1px solid ${isActive ? 'var(--accent)' : 'var(--line)'}; background: ${isActive ? 'var(--accent-soft)' : 'var(--surface-alt)'}; color: var(--ink); display: block; width: 100%;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+        <div style="font-weight: 600; font-size: 14px; color: ${isActive ? 'var(--accent)' : 'var(--ink)'}">${title}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">${escapeHtml(subtitle)}</div>
+      </div>
+      ${hint ? `<div style="font-size: 11px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4;">${escapeHtml(hint)}</div>` : ''}
+    </button>
+  `;
+}
+
+function selectClaimRoute(r) {
+  claimDraft.route = r;
+  renderClaimSheet();
+  if (navigator.vibrate) try { navigator.vibrate(5); } catch(e) {}
+}
+window.selectClaimRoute = selectClaimRoute;
+
+function useFullClaimable() {
+  const p = state.positions.find(x => x.id === claimDraft.positionId);
+  if (!p) return;
+  claimDraft.amount = +p.claimable || 0;
+  renderClaimSheet();
+}
+window.useFullClaimable = useFullClaimable;
+
+function refreshClaimPreview() {
+  // Just enable/disable confirm button without full re-render
+  const btn = document.getElementById('cdConfirmBtn');
+  if (btn) {
+    const ok = claimDraft.route && claimDraft.amount > 0;
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '0.4';
+  }
+}
+window.refreshClaimPreview = refreshClaimPreview;
+
+function renderClaimSubConfig() {
+  if (!claimDraft.route) return '';
+
+  if (claimDraft.route === 'position') {
+    const otherPositions = state.positions.filter(x => x.status === 'active' && x.id !== claimDraft.positionId);
+    if (otherPositions.length === 0) return '<div class="muted" style="padding: 8px 0; font-size:12px;">No other active positions available.</div>';
+    return `
+      <div style="background: var(--surface-alt); padding: 12px; border-radius: 12px; margin-top: 4px;">
+        <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Target position</label>
+        <select id="cdTargetPos" onchange="claimDraft.targetPositionId = this.value"
+          style="width:100%; padding:11px; border-radius:10px; background:var(--surface); border:1px solid var(--line); margin-top:6px; font-family: var(--sans); color: var(--ink);">
+          <option value="">— Select target —</option>
+          ${otherPositions.map(p => `<option value="${p.id}" ${claimDraft.targetPositionId === p.id ? 'selected' : ''}>${escapeHtml(p.protocol)} · ${escapeHtml(p.asset || p.name)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  if (claimDraft.route === 'treasury') {
+    return `
+      <div style="background: var(--surface-alt); padding: 12px; border-radius: 12px; margin-top: 4px;">
+        <!-- Mode toggle -->
+        <div style="display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin-bottom: 12px;">
+          <button onclick="claimDraft.treasuryMode='single'; renderClaimSheet()"
+            style="flex: 1; padding: 9px; border-radius: 7px; font-size: 12px; font-weight: 600; background: ${claimDraft.treasuryMode === 'single' ? 'var(--accent-soft)' : 'transparent'}; color: ${claimDraft.treasuryMode === 'single' ? 'var(--accent)' : 'var(--ink-mute)'};">
+            Single asset
+          </button>
+          <button onclick="claimDraft.treasuryMode='split'; renderClaimSheet()"
+            style="flex: 1; padding: 9px; border-radius: 7px; font-size: 12px; font-weight: 600; background: ${claimDraft.treasuryMode === 'split' ? 'var(--accent-soft)' : 'transparent'}; color: ${claimDraft.treasuryMode === 'split' ? 'var(--accent)' : 'var(--ink-mute)'};">
+            Split (LP)
+          </button>
+        </div>
+
+        ${claimDraft.treasuryMode === 'single' ? renderSingleAssetUI() : renderSplitAssetUI()}
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+function renderSingleAssetUI() {
+  const assets = ['USDC','USDT','DAI','USDe','ETH','WETH','BTC','WBTC'];
+  return `
+    <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Received as</label>
+    <select id="cdTreasuryAsset" onchange="claimDraft.treasuryAsset = this.value"
+      style="width:100%; padding:11px; border-radius:10px; background:var(--surface); border:1px solid var(--line); margin-top:6px; font-family: var(--mono);">
+      ${assets.map(a => `<option value="${a}" ${claimDraft.treasuryAsset === a ? 'selected' : ''}>${a}</option>`).join('')}
+    </select>
+    <div class="muted" style="font-size:11px; margin-top: 6px; line-height: 1.5;">
+      Stablecoins: units fill 1:1 with USD. For ETH/BTC — set units later in Treasury on desktop.
+    </div>
+  `;
+}
+
+function renderSplitAssetUI() {
+  const assets = ['USDC','USDT','DAI','USDe','ETH','WETH','BTC','WBTC'];
+  const sum = (claimDraft.splitUsdA || 0) + (claimDraft.splitUsdB || 0);
+  const diff = sum - claimDraft.amount;
+  const sumOk = Math.abs(diff) < 0.5;
+
+  return `
+    <div class="muted" style="font-size:11px; margin-bottom: 10px; line-height: 1.5;">
+      LP fees come in two tokens. Sum of A + B should match claim total.
+    </div>
+
+    <div style="background: var(--surface); border: 1px solid var(--line); padding: 10px; border-radius: 10px; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: var(--accent); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.05em;">ASSET A</div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 6px;">
+        <select onchange="claimDraft.splitAssetA = this.value"
+          style="padding:8px 4px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+          ${assets.map(a => `<option value="${a}" ${claimDraft.splitAssetA === a ? 'selected' : ''}>${a}</option>`).join('')}
+        </select>
+        <input type="number" step="0.01" placeholder="USD" value="${claimDraft.splitUsdA || ''}"
+          oninput="claimDraft.splitUsdA = +this.value || 0; renderClaimSheet()"
+          style="padding:8px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+        <input type="number" step="0.000001" placeholder="Units" value="${claimDraft.splitUnitsA || ''}"
+          oninput="claimDraft.splitUnitsA = +this.value || 0"
+          style="padding:8px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+      </div>
+    </div>
+
+    <div style="background: var(--surface); border: 1px solid var(--line); padding: 10px; border-radius: 10px; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: var(--accent); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.05em;">ASSET B</div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 6px;">
+        <select onchange="claimDraft.splitAssetB = this.value"
+          style="padding:8px 4px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+          ${assets.map(a => `<option value="${a}" ${claimDraft.splitAssetB === a ? 'selected' : ''}>${a}</option>`).join('')}
+        </select>
+        <input type="number" step="0.01" placeholder="USD" value="${claimDraft.splitUsdB || ''}"
+          oninput="claimDraft.splitUsdB = +this.value || 0; renderClaimSheet()"
+          style="padding:8px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+        <input type="number" step="0.000001" placeholder="Units" value="${claimDraft.splitUnitsB || ''}"
+          oninput="claimDraft.splitUnitsB = +this.value || 0"
+          style="padding:8px; border-radius:8px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size: 12px;">
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; padding: 8px 4px; font-family: var(--mono); font-size: 12px;">
+      <span class="muted">Sum A+B:</span>
+      <span style="font-weight: 600; color: ${sumOk ? 'var(--pos)' : 'var(--neg)'}">
+        $${sum.toFixed(2)} ${sumOk ? '✓' : `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`}
+      </span>
+    </div>
+  `;
+}
+
+function confirmClaim() {
+  const draft = claimDraft;
+  if (!draft || !draft.route || draft.amount <= 0) {
+    showToast('Pick a route and amount', 'neg');
+    return;
+  }
+  const p = state.positions.find(x => x.id === draft.positionId);
+  if (!p) return;
+
+  const amount = draft.amount;
+  const route = draft.route;
+
+  // Reduce claimable on source position (cap at 0)
+  const oldClaimable = +p.claimable || 0;
+  p.claimable = Math.max(0, oldClaimable - amount);
+  p.updatedAt = new Date().toISOString();
+
+  let txNote = '';
+
+  if (route === 'wallet') {
+    p.realizedPnl = (+p.realizedPnl || 0) + amount;
+    txNote = `Claimed ${fmtUSD(amount, true)} to wallet`;
+
+  } else if (route === 'reinvest') {
+    p.deposited = (+p.deposited || 0) + amount;
+    p.currentValue = (+p.currentValue || 0) + amount;
+    txNote = `Claimed ${fmtUSD(amount, true)} → reinvested into same position`;
+
+  } else if (route === 'position') {
+    if (!draft.targetPositionId) {
+      showToast('Pick a target position', 'neg');
+      // Restore claimable
+      p.claimable = oldClaimable;
+      return;
+    }
+    const target = state.positions.find(x => x.id === draft.targetPositionId);
+    if (!target) {
+      showToast('Target position not found', 'neg');
+      p.claimable = oldClaimable;
+      return;
+    }
+    target.deposited = (+target.deposited || 0) + amount;
+    target.currentValue = (+target.currentValue || 0) + amount;
+    target.updatedAt = new Date().toISOString();
+    txNote = `Claimed ${fmtUSD(amount, true)} → deployed into ${target.protocol} · ${target.asset || target.name}`;
+
+  } else if (route === 'treasury') {
+    if (!Array.isArray(state.idleTreasury)) state.idleTreasury = [];
+    if (draft.treasuryMode === 'split') {
+      if (draft.splitUsdA <= 0 || draft.splitUsdB <= 0) {
+        showToast('Enter USD for both assets', 'neg');
+        p.claimable = oldClaimable;
+        return;
+      }
+      if (draft.splitAssetA === draft.splitAssetB) {
+        showToast('Pick two different assets', 'neg');
+        p.claimable = oldClaimable;
+        return;
+      }
+      const sumOk = Math.abs((draft.splitUsdA + draft.splitUsdB) - amount) < 0.5;
+      if (!sumOk && !confirm(`Sum ${fmtUSD(draft.splitUsdA + draft.splitUsdB, false)} doesn't match claim ${fmtUSD(amount, false)}. Proceed?`)) {
+        p.claimable = oldClaimable;
+        return;
+      }
+      state.idleTreasury.push({
+        id: 'idle_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        asset: draft.splitAssetA, units: draft.splitUnitsA, usdValue: draft.splitUsdA,
+        source: 'claim-reward',
+        note: `LP fees from ${p.protocol} · ${p.asset || p.name}`,
+        createdAt: new Date().toISOString(), sourceRef: p.id
+      });
+      state.idleTreasury.push({
+        id: 'idle_' + Date.now().toString(36) + '_2' + Math.random().toString(36).slice(2, 6),
+        asset: draft.splitAssetB, units: draft.splitUnitsB, usdValue: draft.splitUsdB,
+        source: 'claim-reward',
+        note: `LP fees from ${p.protocol} · ${p.asset || p.name}`,
+        createdAt: new Date().toISOString(), sourceRef: p.id
+      });
+      p.realizedPnl = (+p.realizedPnl || 0) + amount;
+      txNote = `Claimed ${fmtUSD(amount, true)} → idle (split: ${draft.splitUnitsA.toFixed(4)} ${draft.splitAssetA} + ${draft.splitUnitsB.toFixed(4)} ${draft.splitAssetB})`;
+    } else {
+      const STABLES = ['USDC','USDT','DAI','USDe','FRAX','USDS'];
+      const asset = draft.treasuryAsset || 'USDC';
+      const isStable = STABLES.includes(asset);
+      state.idleTreasury.push({
+        id: 'idle_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        asset: asset,
+        units: isStable ? amount : 0,
+        usdValue: amount,
+        source: 'claim-reward',
+        note: `Claim from ${p.protocol} · ${p.asset || p.name}`,
+        createdAt: new Date().toISOString(),
+        sourceRef: p.id
+      });
+      if (!isStable) {
+        setTimeout(() => showToast('Note: set units for ' + asset + ' on desktop'), 1500);
+      }
+      p.realizedPnl = (+p.realizedPnl || 0) + amount;
+      txNote = `Claimed ${fmtUSD(amount, true)} → idle treasury (${asset})`;
+    }
+
+  } else if (route === 'new-position') {
+    // Mobile can't create a new position — just log
+    p.realizedPnl = (+p.realizedPnl || 0) + amount;
+    txNote = `Claimed ${fmtUSD(amount, true)} · open new position on desktop`;
+  }
+
+  // Append the actual tx note from sheet
+  if (draft.note) txNote = txNote + ' — ' + draft.note;
+
+  // Write transaction using logTx style (matches desktop v37 format)
+  if (!state.transactions) state.transactions = [];
+  state.transactions.unshift({
+    id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    timestamp: new Date().toISOString(),
+    date: new Date().toISOString(),
+    action: 'claim',
+    type: 'claim-reward',
+    positionId: p.id,
+    position: p.id,
+    positionName: p.asset || p.name || null,
+    protocol: p.protocol || '—',
+    asset: p.asset || '—',
+    amount: amount,
+    route: route,
+    currentValue: +p.currentValue || 0,
+    claimable: +p.claimable || 0,
+    note: txNote
+  });
+  if (state.transactions.length > 500) state.transactions.length = 500;
+
+  saveState();
+  closeSheet();
+  showToast('✓ ' + txNote, 'pos');
+  if (currentPositionId === p.id) openPositionDetail(p.id);
+  renderActiveScreen();
+}
+window.confirmClaim = confirmClaim;
+
+/* ---------- Edit current value sheet ---------- */
+function openEditValueSheet(positionId) {
+  const p = state.positions.find(x => x.id === positionId);
+  if (!p) return;
+  const html = `
+    <div class="sheet-title">Update current value</div>
+    <div class="sheet-sub">${escapeHtml(p.name || p.asset || 'Position')}</div>
+
+    <div style="display: grid; gap: 14px; margin: 8px 0;">
+      <div>
+        <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Current Value (USD)</label>
+        <input id="newValue" type="number" step="0.01" value="${(+p.currentValue || 0).toFixed(2)}"
+          style="width:100%; padding:13px; border-radius:12px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size:18px; margin-top:6px;">
+      </div>
+      <div>
+        <label style="font-size:11px; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase">Claimable (USD)</label>
+        <input id="newClaimable" type="number" step="0.01" value="${(+p.claimable || 0).toFixed(2)}"
+          style="width:100%; padding:13px; border-radius:12px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size:18px; margin-top:6px;">
+      </div>
+      <div class="muted" style="font-size:11px; padding: 4px 4px;">
+        Tip: For auto-sync of Pendle PT and Uniswap LP values — use desktop.
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn" onclick="closeSheet()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditValue('${p.id}')">Save</button>
+    </div>
+  `;
+  openSheet(html);
+}
+window.openEditValueSheet = openEditValueSheet;
+
+function submitEditValue(positionId) {
+  const p = state.positions.find(x => x.id === positionId);
+  if (!p) return;
+  const nv = +document.getElementById('newValue').value;
+  const nc = +document.getElementById('newClaimable').value;
+  if (isNaN(nv) || isNaN(nc) || nv < 0 || nc < 0) { showToast('Invalid value', 'neg'); return; }
+  p.currentValue = nv;
+  p.claimable = nc;
+  p.lastUpdated = new Date().toISOString();
+  saveState();
+  closeSheet();
+  showToast('✓ Value updated', 'pos');
+  if (currentPositionId === p.id) openPositionDetail(p.id);
+  renderActiveScreen();
+}
+window.submitEditValue = submitEditValue;
+
+
+/* ===================================================================
+   MARKETS SCREEN — DefiLlama yields + Pendle PT (compact)
+=================================================================== */
+let marketsState = { tab: 'pendle', query: '', data: { pendle: null, llama: null }, loading: false };
+
+function renderMarkets() {
+  const html = `
+    <div class="hero" style="padding: 12px 4px 4px">
+      <div class="hero-label">Markets</div>
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px;">
+        <div style="font-family: var(--serif); font-size: 24px;">Yield Explorer</div>
+        <span class="muted" style="font-size: 12px;">live · external feeds</span>
+      </div>
+    </div>
+
+    <div class="mk-tabs">
+      <button data-tab="pendle" ${marketsState.tab==='pendle'?'class="is-active"':''}>Pendle PT</button>
+      <button data-tab="stables" ${marketsState.tab==='stables'?'class="is-active"':''}>Stablecoin Yields</button>
+      <button data-tab="lp" ${marketsState.tab==='lp'?'class="is-active"':''}>LP / DEX</button>
+      <button data-tab="lending" ${marketsState.tab==='lending'?'class="is-active"':''}>Lending</button>
+    </div>
+
+    <input class="mk-search" id="mkSearch" placeholder="Search assets, protocols…" value="${escapeHtml(marketsState.query)}">
+
+    <div id="mkResults">
+      ${marketsState.loading
+        ? '<div class="empty"><div class="e-rune" style="animation: pulse 1.4s infinite ease-in-out">ᚠ</div><div class="e-text">Loading markets…</div></div>'
+        : '<div class="empty"><div class="e-rune">ᚠ</div><div class="e-text">Tap a tab above to load.</div></div>'
+      }
+    </div>
+  `;
+  document.getElementById('screen-markets').innerHTML = html;
+
+  document.querySelectorAll('.mk-tabs button').forEach(b => {
+    b.addEventListener('click', () => {
+      marketsState.tab = b.dataset.tab;
+      renderMarkets();
+      loadMarketTab();
+    });
+  });
+  document.getElementById('mkSearch').addEventListener('input', (e) => {
+    marketsState.query = e.target.value;
+    renderMarketResults();
+  });
+  loadMarketTab();
+}
+
+async function loadMarketTab() {
+  const tab = marketsState.tab;
+  marketsState.loading = true;
+  document.getElementById('mkResults').innerHTML =
+    '<div class="empty"><div class="e-rune" style="animation: pulse 1.4s infinite ease-in-out">ᚠ</div><div class="e-text">Loading markets…</div></div>';
+  try {
+    if (tab === 'pendle') {
+      if (!marketsState.data.pendle) {
+        const res = await fetch('https://api-v2.pendle.finance/core/v1/1/markets/active');
+        const j = await res.json();
+        marketsState.data.pendle = (j.markets || []).map(m => ({
+          name: (m.pt && m.pt.symbol) || m.name || 'PT',
+          protocol: 'Pendle',
+          apy: (m.aggregatedApy * 100) || (m.impliedApy * 100) || 0,
+          tvl: m.liquidity?.usd || 0,
+          chain: 'Ethereum',
+          maturity: m.expiry,
+          url: m.address ? 'https://app.pendle.finance/trade/markets/' + m.address + '/swap' : null,
+          raw: m
+        })).filter(x => x.apy > 0);
+      }
+    } else if (tab === 'stables' || tab === 'lp' || tab === 'lending') {
+      if (!marketsState.data.llama) {
+        const res = await fetch('https://yields.llama.fi/pools');
+        const j = await res.json();
+        marketsState.data.llama = j.data || [];
+      }
+    }
+  } catch (e) {
+    console.warn('Markets load failed', e);
+    showToast('Failed to load markets', 'neg');
+  }
+  marketsState.loading = false;
+  renderMarketResults();
+}
+
+function renderMarketResults() {
+  const tab = marketsState.tab;
+  const q = (marketsState.query || '').toLowerCase().trim();
+  let rows = [];
+
+  if (tab === 'pendle') {
+    rows = (marketsState.data.pendle || []).slice();
+  } else {
+    const llama = marketsState.data.llama || [];
+    if (tab === 'stables') {
+      rows = llama.filter(p => p.stablecoin && p.tvlUsd > 1_000_000 && p.apy > 0);
+    } else if (tab === 'lp') {
+      rows = llama.filter(p => (p.exposure === 'multi' || (p.symbol && p.symbol.includes('-'))) && p.tvlUsd > 1_000_000);
+    } else if (tab === 'lending') {
+      rows = llama.filter(p => ['lending','collateral'].includes(p.category || '') || ['Aave','Compound','Morpho','Spark','Euler','Fluid'].some(x => (p.project || '').toLowerCase().includes(x.toLowerCase())));
+      rows = rows.filter(p => p.tvlUsd > 1_000_000 && p.apy > 0);
+    }
+    rows = rows.map(p => ({
+      name: p.symbol || p.pool,
+      protocol: p.project,
+      apy: p.apy || 0,
+      tvl: p.tvlUsd || 0,
+      chain: p.chain,
+      url: p.url || ('https://defillama.com/yields/pool/' + p.pool)
+    }));
+  }
+
+  if (q) {
+    rows = rows.filter(r =>
+      (r.name || '').toLowerCase().includes(q) ||
+      (r.protocol || '').toLowerCase().includes(q) ||
+      (r.chain || '').toLowerCase().includes(q)
+    );
+  }
+
+  rows.sort((a,b) => (b.apy || 0) - (a.apy || 0));
+  rows = rows.slice(0, 60);
+
+  const el = document.getElementById('mkResults');
+  if (rows.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="e-rune">ᚠ</div><div class="e-text">No results.</div></div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => `
+    <div class="mk-row" ${r.url ? `onclick="window.open('${escapeHtml(r.url)}', '_blank')"` : ''}>
+      <div class="mk-name">${escapeHtml(r.name)}</div>
+      <div class="mk-apy">${r.apy.toFixed(2)}%</div>
+      <div class="mk-meta">${escapeHtml(r.protocol || '')} · ${escapeHtml(r.chain || '')}${r.maturity ? ' · ' + daysToMaturity(r.maturity) : ''}</div>
+      <div class="mk-tvl">${r.tvl ? '$' + (r.tvl/1e6).toFixed(1) + 'M' : ''}</div>
+    </div>
+  `).join('');
+}
+
+/* ===================================================================
+   AI ANALYST SCREEN
+=================================================================== */
+let aiMessages = []; // {role, content}
+let aiBusy = false;
+let aiKey = localStorage.getItem(ANTHROPIC_KEY_K) || '';
+
+function renderAI() {
+  const html = `
+    <div class="ai-screen" id="aiScreen">
+      ${!aiKey ? renderAINeedKey() : renderAIChat()}
+    </div>
+  `;
+  document.getElementById('screen-ai').innerHTML = html;
+  if (aiKey) {
+    setTimeout(scrollAIToBottom, 50);
+    const ta = document.getElementById('aiInput');
+    if (ta) ta.addEventListener('input', autosizeTextarea);
+  }
+}
+
+function renderAINeedKey() {
+  return `
+    <div style="padding: 16px 4px;">
+      <div class="hero" style="padding: 6px 0 8px">
+        <div class="hero-label">AI Analyst</div>
+        <div style="font-family: var(--serif); font-size: 24px;">Set your Anthropic key</div>
+      </div>
+      <div class="card mt-8">
+        <div style="font-size: 13px; line-height: 1.6; color: var(--ink-dim);">
+          The AI Analyst connects directly to your Anthropic account. Your key is stored only on this device (localStorage).
+        </div>
+        <label style="display:block; font-size:11px; color:var(--ink-mute); letter-spacing:0.08em; text-transform:uppercase; margin: 14px 0 6px;">API Key</label>
+        <input id="aiKeyInput" type="password" placeholder="sk-ant-..." style="width:100%; padding:12px 14px; border-radius:10px; background:var(--surface-alt); border:1px solid var(--line); font-family:var(--mono); font-size:12px;">
+        <button class="btn btn-primary btn-block mt-12" onclick="saveAIKey()">Save Key</button>
+        <div class="muted mt-8" style="font-size:11px;">
+          Get a key at console.anthropic.com → Settings → API Keys
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveAIKey() {
+  const v = document.getElementById('aiKeyInput').value.trim();
+  if (!v.startsWith('sk-ant-')) { showToast('Key should start with sk-ant-', 'neg'); return; }
+  localStorage.setItem(ANTHROPIC_KEY_K, v);
+  aiKey = v;
+  renderAI();
+  showToast('AI Analyst ready', 'pos');
+}
+window.saveAIKey = saveAIKey;
+
+function renderAIChat() {
+  const greeting = aiMessages.length === 0
+    ? `<div class="ai-msg bot">Hello, Ivan. I'm your portfolio analyst. Ask me anything about your positions, yield strategy, or markets.</div>`
+    : '';
+
+  return `
+    <div class="ai-msgs" id="aiMsgs">
+      ${greeting}
+      ${aiMessages.map(m => `
+        <div class="ai-msg ${m.role === 'user' ? 'user' : 'bot'}">${formatAIContent(m.content)}</div>
+      `).join('')}
+      ${aiBusy ? '<div class="ai-msg bot" style="opacity:0.7"><em>thinking…</em></div>' : ''}
+    </div>
+
+    <div class="ai-quick">
+      <button onclick="aiQuickPrompt('Give a brief summary of my portfolio.')">Summary</button>
+      <button onclick="aiQuickPrompt('Which of my positions look weakest right now?')">Weak spots</button>
+      <button onclick="aiQuickPrompt('Should I rotate anything to lower-risk positions?')">De-risk?</button>
+      <button onclick="aiQuickPrompt('What is my maturity exposure?')">Maturities</button>
+    </div>
+
+    <div class="ai-input-bar">
+      <textarea id="aiInput" placeholder="Ask anything…" rows="1"></textarea>
+      <button class="ai-send" onclick="sendAIMessage()">↑</button>
+    </div>
+  `;
+}
+
+function formatAIContent(text) {
+  // Minimal escape + bold (**...**)
+  let html = escapeHtml(text);
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/`(.+?)`/g, '<code style="background:var(--surface-alt); padding:1px 5px; border-radius:4px;">$1</code>');
+  return html;
+}
+
+function autosizeTextarea(e) {
+  const ta = e.target;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+
+function scrollAIToBottom() {
+  const c = document.getElementById('aiMsgs');
+  if (c) c.scrollTop = c.scrollHeight;
+}
+
+function aiQuickPrompt(text) {
+  const ta = document.getElementById('aiInput');
+  if (ta) { ta.value = text; ta.focus(); }
+}
+window.aiQuickPrompt = aiQuickPrompt;
+
+async function sendAIMessage() {
+  if (aiBusy) return;
+  const ta = document.getElementById('aiInput');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  ta.style.height = 'auto';
+
+  aiMessages.push({ role: 'user', content: text });
+  aiBusy = true;
+  renderAI();
+
+  try {
+    const portfolioContext = buildPortfolioContext();
+    const system = `You are the AI Analyst for Fehu Invest Fund — a private DeFi portfolio. The owner Ivan asks about his portfolio, markets, strategy. Be concise, professional, like a senior portfolio manager. Use specific numbers from the data below. Don't recommend leverage or aggressive strategies — Ivan is conservative, targets 5-15% APY.
+
+CURRENT PORTFOLIO:
+${portfolioContext}`;
+
+    const apiMessages = aiMessages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content
+    }));
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': aiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1500,
+        system: system,
+        messages: apiMessages
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || ('HTTP ' + res.status));
+    }
+    const j = await res.json();
+    const reply = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+    aiMessages.push({ role: 'assistant', content: reply || '(empty response)' });
+  } catch (e) {
+    console.error('AI error', e);
+    aiMessages.push({ role: 'assistant', content: '⚠ Error: ' + e.message + '\n\nIf this persists — check your API key in Settings.' });
+  }
+
+  aiBusy = false;
+  renderAI();
+  setTimeout(scrollAIToBottom, 50);
+}
+window.sendAIMessage = sendAIMessage;
+
+function buildPortfolioContext() {
+  const nav = computeTotalNAV();
+  const apy = computeWeightedAPY();
+  const active = state.positions.filter(p => p.status === 'active');
+  const dep = computeTotalDeposited();
+  const realized = state.positions.reduce((s,p) => s + posRealizedPnl(p), 0);
+  const unrealized = computeNAV() - dep;
+  const pnl = unrealized + realized;
+
+  let s = `NAV: ${fmtUSDFull(nav)}\n`;
+  s += `Weighted APY (entry): ${apy.toFixed(2)}%\n`;
+  s += `Total P&L: ${fmtUSD(pnl, true)} (realized ${fmtUSD(realized, false)} + unrealized ${fmtUSD(unrealized, true)})\n`;
+  s += `Active positions: ${active.length}\n\n`;
+  s += `POSITIONS:\n`;
+  active.forEach(p => {
+    const val = positionValue(p);
+    const cl = +p.claimable || 0;
+    const a = posAPY(p);
+    const m = posMaturity(p);
+    s += `- ${p.asset || p.name || p.protocol} (${p.protocol}/${p.chain || ''}/${posType(p) || 'pos'}): ${fmtUSD(val,false)}, entry APY ${a.toFixed(2)}%${cl ? ', claimable ' + fmtUSD(cl,false) : ''}${m ? ', matures ' + String(m).slice(0,10) : ''}\n`;
+  });
+  if ((state.idleTreasury || []).length > 0) {
+    s += `\nIDLE: ${fmtUSD(computeIdleTotal(), false)}`;
+  }
+
+  // Recent monthly income context
+  try {
+    const { byMonth, sortedKeys } = buildMonthlyRewardsData();
+    if (sortedKeys.length > 0) {
+      s += `\n\nRECENT MONTHLY INCOME (last 3):\n`;
+      sortedKeys.slice(0, 3).forEach(k => {
+        const label = new Date(k + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        s += `- ${label}: ${fmtUSD(byMonth[k].total, false)} (${byMonth[k].count} claims)\n`;
+      });
+    }
+  } catch(e) {}
+  return s;
+}
+
+
+/* ===================================================================
+   MORE SCREEN — tiles + sub-sections
+=================================================================== */
+function renderMore() {
+  const html = `
+    <div class="hero" style="padding: 12px 4px 4px">
+      <div class="hero-label">More</div>
+      <div style="font-family: var(--serif); font-size: 22px;">All sections</div>
+    </div>
+
+    <div class="more-grid mt-12">
+      <button class="more-tile" onclick="openMore('income')">
+        <span class="mt-icon">⤴</span>
+        <span class="mt-title">Income</span>
+        <span class="mt-sub">Daily yield · charts</span>
+      </button>
+      <button class="more-tile" onclick="openMore('rewards')">
+        <span class="mt-icon">✦</span>
+        <span class="mt-title">Rewards</span>
+        <span class="mt-sub">Claim history · by route</span>
+      </button>
+      <button class="more-tile" onclick="openMore('monthly-rewards')">
+        <span class="mt-icon">▦</span>
+        <span class="mt-title">Monthly Report</span>
+        <span class="mt-sub">YTD · Projected · by route</span>
+      </button>
+      <button class="more-tile" onclick="openMore('position-history')">
+        <span class="mt-icon">⌇</span>
+        <span class="mt-title">Position History</span>
+        <span class="mt-sub">Value over time</span>
+      </button>
+      <button class="more-tile" onclick="openMore('journal')">
+        <span class="mt-icon">≣</span>
+        <span class="mt-title">Journal</span>
+        <span class="mt-sub">All transactions</span>
+      </button>
+      <button class="more-tile" onclick="openMore('treasury')">
+        <span class="mt-icon">◯</span>
+        <span class="mt-title">Treasury</span>
+        <span class="mt-sub">Idle capital</span>
+      </button>
+      <button class="more-tile" onclick="openMore('composition')">
+        <span class="mt-icon">◧</span>
+        <span class="mt-title">Composition</span>
+        <span class="mt-sub">By protocol · chain</span>
+      </button>
+      <button class="more-tile" onclick="openMore('maturity')">
+        <span class="mt-icon">∣</span>
+        <span class="mt-title">Maturity</span>
+        <span class="mt-sub">PT redemption dates</span>
+      </button>
+      <button class="more-tile" onclick="openMore('performance')">
+        <span class="mt-icon">△</span>
+        <span class="mt-title">Performance</span>
+        <span class="mt-sub">Realized + unrealized</span>
+      </button>
+      <button class="more-tile" onclick="openMore('distributions')">
+        <span class="mt-icon">⇆</span>
+        <span class="mt-title">Capital Flows</span>
+        <span class="mt-sub">In · Out</span>
+      </button>
+      <button class="more-tile" onclick="openMore('settings')">
+        <span class="mt-icon">⚙</span>
+        <span class="mt-title">Settings</span>
+        <span class="mt-sub">Cloud · API · About</span>
+      </button>
+    </div>
+  `;
+  document.getElementById('screen-more').innerHTML = html;
+}
+
+function openMore(section) {
+  const titles = {
+    income: 'Income Tracker',
+    rewards: 'Rewards Ledger',
+    'monthly-rewards': 'Monthly Report',
+    'position-history': 'Position History',
+    journal: 'Journal',
+    treasury: 'Treasury',
+    composition: 'Composition',
+    maturity: 'Maturity',
+    performance: 'Performance',
+    distributions: 'Capital Flows',
+    settings: 'Settings'
+  };
+  const renderers = {
+    income: renderIncomeDetail,
+    rewards: renderRewardsDetail,
+    'monthly-rewards': renderMonthlyRewardsDetail,
+    'position-history': renderPositionHistoryDetail,
+    journal: renderJournalDetail,
+    treasury: renderTreasuryDetail,
+    composition: renderCompositionDetail,
+    maturity: renderMaturityDetail,
+    performance: renderPerformanceDetail,
+    distributions: renderDistributionsDetail,
+    settings: renderSettingsDetail
+  };
+  openSubscreen(titles[section] || 'More', renderers[section] ? renderers[section]() : '<div class="empty"><div class="e-text">Coming soon.</div></div>');
+
+  // Init charts after render
+  if (section === 'monthly-rewards') setTimeout(renderMonthlyRewardsChart, 100);
+  if (section === 'position-history') setTimeout(initPositionHistory, 100);
+}
+window.openMore = openMore;
+
+/* ---------- Income detail ---------- */
+function renderIncomeDetail() {
+  const claimsByDay = {};
+  const allClaims = (state.transactions || []).filter(isClaimTx);
+  allClaims.forEach(t => {
+    const ts = claimDate(t);
+    if (!ts) return;
+    const d = ts.slice(0, 10);
+    claimsByDay[d] = (claimsByDay[d] || 0) + claimAmount(t);
+  });
+
+  const days = Object.keys(claimsByDay).sort();
+  const totalIncome = allClaims.reduce((s,t) => s + claimAmount(t), 0);
+
+  const last30 = days.filter(d => (Date.now() - new Date(d).getTime()) <= 30*86_400_000);
+  const last30Income = last30.reduce((s, d) => s + claimsByDay[d], 0);
+
+  // By source
+  const bySource = {};
+  allClaims.forEach(t => {
+    const key = t.protocol || t.positionName || 'Other';
+    bySource[key] = (bySource[key] || 0) + claimAmount(t);
+  });
+  const sources = Object.entries(bySource).sort((a,b) => b[1] - a[1]);
+
+  return `
+    <div class="hero" style="padding: 8px 4px 4px">
+      <div class="hero-label">Total Income</div>
+      <div class="hero-nav">${fmtUSDFull(totalIncome).replace(/\$/, '<span class="currency">$</span>')}</div>
+      <div class="hero-delta">
+        <span class="muted">all-time real income from claims</span>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">Last 30 Days</div>
+        <div class="k-val">${fmtUSD(last30Income, false)}</div>
+        <div class="k-foot">${last30.length} claim events</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Avg / month</div>
+        <div class="k-val">${fmtUSD(estimateMonthly(claimsByDay), false)}</div>
+        <div class="k-foot">trailing 90d</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><h2>By Source</h2></div>
+    ${sources.length === 0 ? '<div class="empty"><div class="e-text">No claims logged.</div></div>' :
+      sources.map(([name, amt]) => `
+        <div class="feed-item">
+          <div class="feed-icon claim">✦</div>
+          <div class="feed-body">
+            <div class="feed-title">${escapeHtml(name)}</div>
+            <div class="feed-meta">${totalIncome ? (amt/totalIncome*100).toFixed(1) : '0'}% of total</div>
+          </div>
+          <div class="feed-amt pos">${fmtUSD(amt, false)}</div>
+        </div>
+      `).join('')
+    }
+  `;
+}
+
+function estimateMonthly(claimsByDay) {
+  const cutoff = Date.now() - 90 * 86_400_000;
+  let total = 0;
+  Object.keys(claimsByDay).forEach(d => {
+    if (new Date(d).getTime() >= cutoff) total += claimsByDay[d];
+  });
+  return total / 3;
+}
+
+/* ---------- Rewards detail ---------- */
+function renderRewardsDetail() {
+  const claims = (state.transactions || [])
+    .filter(isClaimTx)
+    .sort((a,b) => new Date(claimDate(b)) - new Date(claimDate(a)));
+
+  const total = claims.reduce((s,c) => s + claimAmount(c), 0);
+  const total30 = claims.filter(c => (Date.now() - new Date(claimDate(c)).getTime()) <= 30*86_400_000)
+    .reduce((s,c) => s + claimAmount(c), 0);
+  const total7  = claims.filter(c => (Date.now() - new Date(claimDate(c)).getTime()) <= 7*86_400_000)
+    .reduce((s,c) => s + claimAmount(c), 0);
+
+  // By route
+  const byRoute = { wallet: 0, reinvest: 0, idle: 0, position: 0, 'new-position': 0 };
+  claims.forEach(c => {
+    const r = claimRoute(c);
+    if (byRoute.hasOwnProperty(r)) byRoute[r] += claimAmount(c);
+  });
+
+  const routeMeta = {
+    wallet:        { label: '→ Wallet', desc: 'cashed out' },
+    reinvest:      { label: '↻ Reinvest', desc: 'compounded' },
+    idle:          { label: '◯ Idle', desc: 'to treasury' },
+    position:      { label: '⇉ Position', desc: 'deployed elsewhere' },
+    'new-position':{ label: '✦ New position', desc: 'fresh entry' }
+  };
+
+  return `
+    <div class="kpi-grid mt-12">
+      <div class="kpi">
+        <div class="k-lbl">All-time</div>
+        <div class="k-val">${fmtUSD(total, false)}</div>
+        <div class="k-foot">${claims.length} claim events</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Last 30d</div>
+        <div class="k-val">${fmtUSD(total30, false)}</div>
+        <div class="k-foot">7d: ${fmtUSD(total7, false)}</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><h2>By Route</h2></div>
+    ${Object.entries(byRoute).filter(([_, v]) => v > 0).map(([r, amt]) => `
+      <div class="feed-item">
+        <div class="feed-icon" style="color: var(--accent); font-size: 14px;">${routeMeta[r]?.label.charAt(0) || '·'}</div>
+        <div class="feed-body">
+          <div class="feed-title">${routeMeta[r]?.label || r}</div>
+          <div class="feed-meta">${routeMeta[r]?.desc || ''} · ${total ? (amt/total*100).toFixed(1) : '0'}%</div>
+        </div>
+        <div class="feed-amt">${fmtUSD(amt, false)}</div>
+      </div>
+    `).join('') || '<div class="muted" style="text-align:center; padding:14px; font-size:12px;">No routed claims yet.</div>'}
+
+    <div class="sec-head mt-16"><h2>Claim History</h2></div>
+    ${claims.length === 0
+      ? '<div class="empty"><div class="e-rune">✦</div><div class="e-title">No claims yet</div><div class="e-text">Log claims from a position detail screen.</div></div>'
+      : `<div class="feed">${claims.map(c => {
+          const r = claimRoute(c);
+          return `
+        <div class="feed-item">
+          <div class="feed-icon claim">✦</div>
+          <div class="feed-body">
+            <div class="feed-title">${escapeHtml(c.positionName || c.asset || c.protocol || 'Claim')}</div>
+            <div class="feed-meta">${fmtDate(claimDate(c))}${c.protocol && c.positionName ? ' · ' + escapeHtml(c.protocol) : ''} · <span style="color:var(--accent)">${routeMeta[r]?.label || r}</span></div>
+          </div>
+          <div class="feed-amt pos">+${fmtUSD(claimAmount(c), false)}</div>
+        </div>
+      `;}).join('')}</div>`
+    }
+  `;
+}
+
+/* ---------- Journal ---------- */
+function renderJournalDetail() {
+  const all = buildRecentFeed(200);
+  return `
+    <div class="sec-head"><h2>All Activity</h2></div>
+    ${all.length === 0 ? '<div class="empty"><div class="e-text">No events yet.</div></div>' :
+      `<div class="feed">${all.map(renderFeedItem).join('')}</div>`
+    }
+  `;
+}
+
+/* ---------- Treasury ---------- */
+function renderTreasuryDetail() {
+  const idle = state.idleTreasury || [];
+  const totalIdle = computeIdleTotal();
+  const totalDeployed = computeNAV();
+  const totalNAV = totalIdle + totalDeployed;
+
+  // Group by asset
+  const byAsset = {};
+  idle.forEach(i => {
+    const a = idleAsset(i);
+    if (!byAsset[a]) byAsset[a] = { usd: 0, units: 0, items: [] };
+    byAsset[a].usd += idleUsd(i);
+    byAsset[a].units += idleUnits(i);
+    byAsset[a].items.push(i);
+  });
+  const grouped = Object.entries(byAsset).sort((a,b) => b[1].usd - a[1].usd);
+
+  return `
+    <div class="hero" style="padding: 8px 4px 4px">
+      <div class="hero-label">Treasury Composition</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px;">
+        <div>
+          <div class="muted" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase">Deployed</div>
+          <div style="font-family: var(--serif); font-size: 22px;">${fmtUSD(totalDeployed, false)}</div>
+          <div class="muted mono" style="font-size:11px">${totalNAV ? (totalDeployed/totalNAV*100).toFixed(1) : '0'}%</div>
+        </div>
+        <div>
+          <div class="muted" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase">Idle</div>
+          <div style="font-family: var(--serif); font-size: 22px; color: var(--accent)">${fmtUSD(totalIdle, false)}</div>
+          <div class="muted mono" style="font-size:11px">${totalNAV ? (totalIdle/totalNAV*100).toFixed(1) : '0'}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-head mt-16"><h2>Idle Assets</h2></div>
+    ${grouped.length === 0
+      ? '<div class="empty"><div class="e-text">No idle treasury.</div></div>'
+      : grouped.map(([assetName, info]) => `
+        <div class="feed-item">
+          <div class="feed-icon" style="font-family:var(--mono); font-size:11px; font-weight:600">${escapeHtml(assetName.slice(0, 4))}</div>
+          <div class="feed-body">
+            <div class="feed-title">${escapeHtml(assetName)} ${info.items.length > 1 ? `<span class="muted" style="font-weight:400">· ${info.items.length} entries</span>` : ''}</div>
+            <div class="feed-meta">${info.units > 0 ? info.units.toLocaleString('en-US', {maximumFractionDigits: 6}) + ' units · ' : ''}${totalIdle ? (info.usd/totalIdle*100).toFixed(1) + '%' : ''}</div>
+          </div>
+          <div class="feed-amt">${fmtUSD(info.usd, false)}</div>
+        </div>
+      `).join('')
+    }
+  `;
+}
+
+/* ---------- Composition ---------- */
+function renderCompositionDetail() {
+  const active = state.positions.filter(p => p.status === 'active');
+  const total = active.reduce((s,p) => s + positionValue(p), 0);
+
+  // By protocol
+  const byProto = {};
+  active.forEach(p => {
+    byProto[p.protocol || 'Other'] = (byProto[p.protocol || 'Other'] || 0) + positionValue(p);
+  });
+  const protos = Object.entries(byProto).sort((a,b) => b[1] - a[1]);
+
+  // By chain
+  const byChain = {};
+  active.forEach(p => {
+    byChain[p.chain || 'Unknown'] = (byChain[p.chain || 'Unknown'] || 0) + positionValue(p);
+  });
+  const chains = Object.entries(byChain).sort((a,b) => b[1] - a[1]);
+
+  return `
+    <div class="sec-head"><h2>By Protocol</h2></div>
+    ${protos.map(([name, val]) => {
+      const pct = total ? (val/total*100) : 0;
+      const color = PROTOCOL_COLORS[name] || PROTOCOL_COLORS['Other'];
+      return `
+        <div style="background: var(--surface); border:1px solid var(--line); border-radius:12px; padding: 12px 14px; margin-bottom: 8px;">
+          <div class="flex-row" style="margin-bottom: 6px;">
+            <span style="display: flex; align-items: center; gap: 8px;"><span style="width:10px; height:10px; border-radius:50%; background:${color}"></span> ${escapeHtml(name)}</span>
+            <span class="mono" style="font-weight:600">${fmtUSD(val,false)}</span>
+          </div>
+          <div style="height: 4px; background: var(--surface-alt); border-radius: 2px; overflow: hidden;">
+            <div style="height: 100%; width: ${pct}%; background: ${color}; border-radius:2px;"></div>
+          </div>
+          <div class="muted mono" style="font-size:11px; margin-top:4px;">${pct.toFixed(1)}%</div>
+        </div>
+      `;
+    }).join('')}
+
+    <div class="sec-head" style="margin-top:18px"><h2>By Chain</h2></div>
+    ${chains.map(([name, val]) => {
+      const pct = total ? (val/total*100) : 0;
+      return `
+        <div style="background: var(--surface); border:1px solid var(--line); border-radius:12px; padding: 12px 14px; margin-bottom: 8px;">
+          <div class="flex-row" style="margin-bottom: 6px;">
+            <span>${escapeHtml(name)}</span>
+            <span class="mono" style="font-weight:600">${fmtUSD(val,false)}</span>
+          </div>
+          <div style="height: 4px; background: var(--surface-alt); border-radius: 2px; overflow: hidden;">
+            <div style="height: 100%; width: ${pct}%; background: var(--accent); border-radius:2px;"></div>
+          </div>
+          <div class="muted mono" style="font-size:11px; margin-top:4px;">${pct.toFixed(1)}%</div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+/* ---------- Maturity ---------- */
+function renderMaturityDetail() {
+  const withMaturity = state.positions
+    .filter(p => p.status === 'active' && posMaturity(p))
+    .sort((a,b) => new Date(posMaturity(a)) - new Date(posMaturity(b)));
+
+  return `
+    <div class="sec-head"><h2>Upcoming Maturities</h2></div>
+    ${withMaturity.length === 0
+      ? '<div class="empty"><div class="e-text">No dated positions.</div></div>'
+      : withMaturity.map(p => {
+        const m = posMaturity(p);
+        const dtm = daysToMaturity(m);
+        const isClose = (new Date(m).getTime() - Date.now()) < 30 * 86_400_000;
+        return `
+          <button class="pos-card" onclick="openPositionDetail('${p.id}')">
+            <span class="stripe" style="background:${PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other']}"></span>
+            <div class="pos-row1">
+              <div class="pos-name">${escapeHtml(p.asset || p.name)}</div>
+              <div class="pos-val">${fmtUSD(positionValue(p), false)}</div>
+            </div>
+            <div class="pos-row2">
+              <span class="pos-meta">${fmtDate(m)}</span>
+              <span class="${isClose?'neg':'pos-apy'}" style="font-family: var(--mono); font-weight:600">${dtm}</span>
+            </div>
+          </button>
+        `;
+      }).join('')
+    }
+  `;
+}
+
+/* ---------- Performance ---------- */
+function renderPerformanceDetail() {
+  const dep = computeTotalDeposited();
+  const liveNav = computeNAV();
+  const realized = state.positions.reduce((s,p) => s + posRealizedPnl(p), 0);
+  const unrealized = liveNav - dep;
+  const pnl = unrealized + realized;
+  const pnlPct = dep ? (pnl/dep*100) : 0;
+
+  // Snapshots over time
+  const snaps = (state.snapshots || []).slice().sort((a,b) => new Date(snapDate(a)) - new Date(snapDate(b)));
+  let minNav = liveNav, maxNav = liveNav;
+  snaps.forEach(s => {
+    const v = snapNav(s);
+    minNav = Math.min(minNav, v);
+    maxNav = Math.max(maxNav, v);
+  });
+  const drawdown = maxNav > 0 ? ((minNav - maxNav) / maxNav * 100) : 0;
+
+  return `
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">Total P&amp;L</div>
+        <div class="k-val ${pnl>=0?'pos':'neg'}">${fmtUSD(pnl, true)}</div>
+        <div class="k-foot">${fmtPct(pnlPct, true)} since inception</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Realized</div>
+        <div class="k-val ${realized>=0?'pos':''}">${fmtUSD(realized, false)}</div>
+        <div class="k-foot">from wallet-routed claims</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Unrealized</div>
+        <div class="k-val ${unrealized>=0?'pos':'neg'}">${fmtUSD(unrealized, true)}</div>
+        <div class="k-foot">current value vs deposited</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Weighted APY</div>
+        <div class="k-val">${computeWeightedAPY().toFixed(2)}%</div>
+        <div class="k-foot">across active</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Peak NAV</div>
+        <div class="k-val">${fmtUSD(maxNav, false)}</div>
+        <div class="k-foot">all-time high</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Max Drawdown</div>
+        <div class="k-val ${drawdown<0?'neg':''}">${drawdown.toFixed(2)}%</div>
+        <div class="k-foot">trough vs peak</div>
+      </div>
+    </div>
+
+    <div class="sec-head mt-16"><h2>Performance Note</h2></div>
+    <div class="card">
+      <div style="font-size: 13px; line-height: 1.6; color: var(--ink-dim);">
+        Detailed quarterly performance, benchmark comparison and attribution breakdown — available on desktop.
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- Distributions ---------- */
+function renderDistributionsDetail() {
+  const contribs = (state.contributions || []).slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+  const dists    = (state.distributions || []).slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+  const flowAmount = (x) => +(x.usdValue ?? x.amount) || 0;
+  const totalIn = contribs.reduce((s,c) => s + flowAmount(c), 0);
+  const totalOut = dists.reduce((s,d) => s + flowAmount(d), 0);
+
+  return `
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">Capital In</div>
+        <div class="k-val">${fmtUSD(totalIn, false)}</div>
+        <div class="k-foot">${contribs.length} contribution${contribs.length===1?'':'s'}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Capital Out</div>
+        <div class="k-val">${fmtUSD(totalOut, false)}</div>
+        <div class="k-foot">${dists.length} distribution${dists.length===1?'':'s'}</div>
+      </div>
+    </div>
+
+    <div class="sec-head mt-16"><h2>Contributions</h2></div>
+    ${contribs.length === 0 ? '<div class="empty"><div class="e-text">No contributions logged.</div></div>' :
+      `<div class="feed">${contribs.map(c => `
+        <div class="feed-item">
+          <div class="feed-icon add">+</div>
+          <div class="feed-body">
+            <div class="feed-title">${escapeHtml(c.note || 'Contribution')}</div>
+            <div class="feed-meta">${fmtDate(c.date)}${c.asset ? ' · ' + escapeHtml(c.asset) : ''}</div>
+          </div>
+          <div class="feed-amt pos">${fmtUSD(flowAmount(c), true)}</div>
+        </div>
+      `).join('')}</div>`
+    }
+
+    <div class="sec-head mt-16"><h2>Distributions</h2></div>
+    ${dists.length === 0 ? '<div class="empty"><div class="e-text">No distributions yet.</div></div>' :
+      `<div class="feed">${dists.map(d => `
+        <div class="feed-item">
+          <div class="feed-icon" style="color: var(--neg)">−</div>
+          <div class="feed-body">
+            <div class="feed-title">${escapeHtml(d.note || 'Distribution')}</div>
+            <div class="feed-meta">${fmtDate(d.date)}${d.asset ? ' · ' + escapeHtml(d.asset) : ''}</div>
+          </div>
+          <div class="feed-amt neg">-${fmtUSD(flowAmount(d), false)}</div>
+        </div>
+      `).join('')}</div>`
+    }
+  `;
+}
+
+
+/* ===================================================================
+   POSITION HISTORY (v37.3.0)
+=================================================================== */
+let positionHistoryChart = null;
+let phSelectedId = null;
+
+function renderPositionHistoryDetail() {
+  const all = state.positions.slice();
+  if (all.length === 0) {
+    return `<div class="empty"><div class="e-rune">⌇</div><div class="e-title">No positions</div><div class="e-text">Open positions on desktop to track their history.</div></div>`;
+  }
+
+  // Default to first active position
+  if (!phSelectedId || !all.find(p => p.id === phSelectedId)) {
+    phSelectedId = (all.find(p => p.status === 'active') || all[0]).id;
+  }
+
+  return `
+    <div class="hero" style="padding: 8px 4px 4px">
+      <div class="hero-label">Position History</div>
+      <div style="font-family: var(--serif); font-size: 20px; margin-top: 4px;">Value over time</div>
+    </div>
+
+    <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-mute); margin: 16px 4px 8px; font-weight: 600;">
+      Select position
+    </div>
+
+    <div id="phPositionChips" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;">
+      ${all.map(p => {
+        const stripe = PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other'];
+        const isActive = p.id === phSelectedId;
+        return `
+          <button onclick="selectPositionForHistory('${p.id}')"
+            style="padding: 7px 11px; border-radius: 999px; border: 1px solid ${isActive ? stripe : 'var(--line)'}; background: ${isActive ? 'var(--accent-soft)' : 'var(--surface)'}; color: ${isActive ? 'var(--accent)' : 'var(--ink-dim)'}; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 5px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:${stripe}"></span>
+            ${escapeHtml(p.asset || p.name)}
+          </button>
+        `;
+      }).join('')}
+    </div>
+
+    <div id="phKpiStrip"></div>
+
+    <div class="chart-wrap" style="height: 240px; margin-top: 14px;">
+      <canvas id="positionHistoryChart"></canvas>
+    </div>
+
+    <div id="phEmptyHint" style="display:none; text-align:center; padding: 14px; color: var(--ink-mute); font-size: 12px; line-height: 1.5;">
+      No daily snapshots for this position yet. <br>Snapshots are captured automatically when you open the app on any device.
+    </div>
+  `;
+}
+
+function selectPositionForHistory(id) {
+  phSelectedId = id;
+  // Re-render whole detail to update chips
+  document.getElementById('subscreenBody').innerHTML = renderPositionHistoryDetail();
+  setTimeout(initPositionHistory, 50);
+  if (navigator.vibrate) try { navigator.vibrate(5); } catch(e) {}
+}
+window.selectPositionForHistory = selectPositionForHistory;
+
+function initPositionHistory() {
+  if (!phSelectedId) return;
+  const p = state.positions.find(x => x.id === phSelectedId);
+  if (!p) return;
+
+  // Collect data points from snapshots (byPosition field)
+  const snaps = (state.snapshots || []).slice().sort((a,b) => new Date(snapDate(a)) - new Date(snapDate(b)));
+  const points = [];
+  snaps.forEach(s => {
+    const byPos = snapByPos(s);
+    if (byPos && byPos[p.id] !== undefined) {
+      const v = +byPos[p.id] || 0;
+      points.push({ x: new Date(snapDate(s)), y: v });
+    }
+  });
+  // Always include current point
+  const currentVal = positionValue(p);
+  if (points.length === 0 || (points[points.length-1].y !== currentVal)) {
+    points.push({ x: new Date(), y: currentVal });
+  }
+
+  // Render KPI strip
+  const hint = document.getElementById('phEmptyHint');
+  const kpiStrip = document.getElementById('phKpiStrip');
+  if (points.length < 2) {
+    if (hint) hint.style.display = 'block';
+    if (kpiStrip) kpiStrip.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="k-lbl">Current Value</div>
+          <div class="k-val">${fmtUSD(currentVal, false)}</div>
+          <div class="k-foot">${escapeHtml(p.protocol || '')}</div>
+        </div>
+        <div class="kpi">
+          <div class="k-lbl">Data points</div>
+          <div class="k-val">1</div>
+          <div class="k-foot">need history</div>
+        </div>
+      </div>
+    `;
+  } else {
+    if (hint) hint.style.display = 'none';
+    const start = points[0].y;
+    const latest = points[points.length-1].y;
+    const change = latest - start;
+    const pct = start ? (change / start * 100) : 0;
+    if (kpiStrip) kpiStrip.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="k-lbl">Start</div>
+          <div class="k-val">${fmtUSD(start, false)}</div>
+          <div class="k-foot">${fmtDateShort(points[0].x.toISOString())}</div>
+        </div>
+        <div class="kpi">
+          <div class="k-lbl">Latest</div>
+          <div class="k-val">${fmtUSD(latest, false)}</div>
+          <div class="k-foot">${fmtDateShort(points[points.length-1].x.toISOString())}</div>
+        </div>
+        <div class="kpi">
+          <div class="k-lbl">Change</div>
+          <div class="k-val ${change>=0?'pos':'neg'}">${fmtUSD(change, true)}</div>
+          <div class="k-foot">${fmtPct(pct, true)}</div>
+        </div>
+        <div class="kpi">
+          <div class="k-lbl">Data points</div>
+          <div class="k-val">${points.length}</div>
+          <div class="k-foot">daily snapshots</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render chart
+  const ctx = document.getElementById('positionHistoryChart');
+  if (!ctx) return;
+  if (positionHistoryChart) { positionHistoryChart.destroy(); positionHistoryChart = null; }
+  const stripe = PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS['Other'];
+
+  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 240);
+  gradient.addColorStop(0, stripe + '44');
+  gradient.addColorStop(1, stripe + '00');
+
+  positionHistoryChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [{
+        data: points,
+        borderColor: stripe,
+        backgroundColor: gradient,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: points.length < 20 ? 3 : 0,
+        pointBackgroundColor: stripe,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: stripe,
+        pointHoverBorderColor: '#11162E',
+        pointHoverBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      scales: {
+        x: { type: 'time', display: false },
+        y: { display: false, grace: '8%' }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#161C38',
+          borderColor: '#232A4A',
+          borderWidth: 1,
+          titleColor: '#A8AEC4',
+          bodyColor: '#F2EDE2',
+          padding: 10,
+          displayColors: false,
+          titleFont: { family: 'Inter', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 13, weight: '600' },
+          callbacks: {
+            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            label: (item) => fmtUSDFull(item.raw.y)
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ===================================================================
+   MONTHLY REWARDS REPORT (v37)
+=================================================================== */
+let monthlyRewardsChart = null;
+
+function buildMonthlyRewardsData() {
+  const claims = (state.transactions || []).filter(isClaimTx);
+  const byMonth = {}; // 'YYYY-MM' -> { total, count, bySource, byRoute }
+
+  claims.forEach(tx => {
+    const ts = claimDate(tx);
+    if (!ts) return;
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const amt = claimAmount(tx);
+    if (amt <= 0) return;
+
+    if (!byMonth[key]) byMonth[key] = { total: 0, count: 0, bySource: {}, byRoute: {} };
+    const m = byMonth[key];
+    m.total += amt;
+    m.count++;
+
+    const src = tx.protocol || 'Other';
+    m.bySource[src] = (m.bySource[src] || 0) + amt;
+
+    const r = claimRoute(tx);
+    m.byRoute[r] = (m.byRoute[r] || 0) + amt;
+  });
+
+  const sortedKeys = Object.keys(byMonth).sort().reverse(); // newest first
+  return { byMonth, sortedKeys };
+}
+
+function renderMonthlyRewardsDetail() {
+  const { byMonth, sortedKeys } = buildMonthlyRewardsData();
+
+  // KPIs
+  const now = new Date();
+  const thisKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastKey = lastMonth.getFullYear() + '-' + String(lastMonth.getMonth() + 1).padStart(2, '0');
+  const thisYearPrefix = now.getFullYear() + '-';
+
+  const thisMonth = byMonth[thisKey]?.total || 0;
+  const lastMonthTotal = byMonth[lastKey]?.total || 0;
+  const ytd = Object.entries(byMonth).filter(([k]) => k.startsWith(thisYearPrefix)).reduce((s, [_, m]) => s + m.total, 0);
+  const allTime = Object.values(byMonth).reduce((s, m) => s + m.total, 0);
+
+  // Projection: average of last 3 months × 12
+  const recentKeys = sortedKeys.slice(0, 3);
+  const recentAvg = recentKeys.length ? recentKeys.reduce((s, k) => s + (byMonth[k].total || 0), 0) / recentKeys.length : 0;
+  const projected = recentAvg * 12;
+
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const thisMonthPace = dayOfMonth > 0 ? (thisMonth / dayOfMonth * daysInMonth) : 0;
+
+  // Trend chip vs last month
+  let trendCh = '';
+  if (lastMonthTotal > 0) {
+    const diff = thisMonth - lastMonthTotal;
+    const diffPct = (diff / lastMonthTotal) * 100;
+    trendCh = `<span class="chip ${diff>=0?'is-pos':'is-neg'}" style="margin-left: 6px;">${diff>=0?'+':''}${diffPct.toFixed(0)}%</span>`;
+  }
+
+  // Route metadata
+  const routeMeta = {
+    wallet:        { label: 'Wallet', color: '#7BA3D9' },
+    reinvest:      { label: 'Reinvest', color: '#5BC287' },
+    idle:          { label: 'Idle', color: '#D4A858' },
+    position:      { label: 'Position', color: '#9DBACF' },
+    'new-position':{ label: 'New', color: '#E07466' }
+  };
+
+  return `
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="k-lbl">This Month</div>
+        <div class="k-val">${fmtUSD(thisMonth, false)}${trendCh}</div>
+        <div class="k-foot">pace: ${fmtUSD(thisMonthPace, false)}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Last Month</div>
+        <div class="k-val">${fmtUSD(lastMonthTotal, false)}</div>
+        <div class="k-foot">${byMonth[lastKey]?.count || 0} claims</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Year-to-date</div>
+        <div class="k-val">${fmtUSD(ytd, false)}</div>
+        <div class="k-foot">${now.getFullYear()}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-lbl">Projected · annual</div>
+        <div class="k-val">${fmtUSD(projected, false)}</div>
+        <div class="k-foot">at trailing 3mo rate</div>
+      </div>
+      <div class="kpi" style="grid-column: 1 / -1;">
+        <div class="k-lbl">All-time</div>
+        <div class="k-val" style="font-size: 22px; font-family: var(--serif);">${fmtUSDFull(allTime)}</div>
+        <div class="k-foot">since inception · ${Object.values(byMonth).reduce((s,m) => s+m.count, 0)} claim events</div>
+      </div>
+    </div>
+
+    <div class="sec-head mt-16">
+      <h2>Monthly Breakdown</h2>
+      <button class="more" onclick="exportMonthlyRewardsCsv()">⇩ CSV</button>
+    </div>
+
+    <div class="chart-wrap" style="height: 220px;">
+      <canvas id="monthlyRewardsChart"></canvas>
+    </div>
+
+    ${sortedKeys.length === 0
+      ? '<div class="empty"><div class="e-rune">▦</div><div class="e-title">No monthly data</div><div class="e-text">Log claims to build a report.</div></div>'
+      : `
+        <div class="sec-head mt-16"><h2>Months</h2></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${sortedKeys.map(key => {
+            const m = byMonth[key];
+            const label = new Date(key + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const routes = Object.entries(m.byRoute).sort((a,b) => b[1] - a[1]);
+            const sources = Object.entries(m.bySource).sort((a,b) => b[1] - a[1]);
+            return `
+              <div class="card" style="padding: 12px 14px;">
+                <div class="flex-row" style="margin-bottom: 8px;">
+                  <div>
+                    <div style="font-family: var(--serif); font-size: 15px; font-weight: 500;">${label}</div>
+                    <div class="muted" style="font-size: 11px;">${m.count} claim${m.count===1?'':'s'}</div>
+                  </div>
+                  <div style="font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--accent);">${fmtUSD(m.total, false)}</div>
+                </div>
+                ${routes.length > 0 ? `
+                  <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft);">
+                    ${routes.map(([r, v]) => `
+                      <span style="font-size: 10px; padding: 3px 8px; border-radius: 999px; background: ${routeMeta[r]?.color || '#888'}22; color: ${routeMeta[r]?.color || '#888'}; font-weight: 500; letter-spacing: 0.02em;">
+                        ${routeMeta[r]?.label || r}: ${fmtUSD(v, false)}
+                      </span>
+                    `).join('')}
+                  </div>
+                ` : ''}
+                ${sources.length > 1 ? `
+                  <div class="muted" style="font-size: 11px; margin-top: 6px; line-height: 1.5;">
+                    Sources: ${sources.map(([s, v]) => escapeHtml(s) + ' (' + fmtUSD(v,false) + ')').join(' · ')}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `
+    }
+  `;
+}
+
+function renderMonthlyRewardsChart() {
+  const { byMonth, sortedKeys } = buildMonthlyRewardsData();
+  const ctx = document.getElementById('monthlyRewardsChart');
+  if (!ctx) return;
+
+  // Show last 12 months — oldest first for chart
+  const last12 = sortedKeys.slice(0, 12).reverse();
+  const labels = last12.map(k => {
+    const d = new Date(k + '-15');
+    return d.toLocaleDateString('en-US', { month: 'short' });
+  });
+  const data = last12.map(k => byMonth[k]?.total || 0);
+
+  if (monthlyRewardsChart) { monthlyRewardsChart.destroy(); monthlyRewardsChart = null; }
+
+  if (data.length === 0) return;
+
+  monthlyRewardsChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: 'rgba(212, 168, 88, 0.7)',
+        borderColor: '#D4A858',
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#A8AEC4', font: { family: 'Inter', size: 10 } }
+        },
+        y: {
+          grid: { color: '#1A1F3A', drawBorder: false },
+          ticks: {
+            color: '#A8AEC4',
+            font: { family: 'JetBrains Mono', size: 10 },
+            callback: (v) => fmtUSD(v, false)
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#161C38',
+          borderColor: '#232A4A',
+          borderWidth: 1,
+          titleColor: '#A8AEC4',
+          bodyColor: '#F2EDE2',
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            label: (item) => fmtUSDFull(item.parsed.y)
+          }
+        }
+      }
+    }
+  });
+}
+
+function exportMonthlyRewardsCsv() {
+  const { byMonth, sortedKeys } = buildMonthlyRewardsData();
+  if (sortedKeys.length === 0) { showToast('No data to export', 'neg'); return; }
+  const allRoutes = new Set(['wallet','reinvest','idle','position','new-position']);
+  const allSources = new Set();
+  Object.values(byMonth).forEach(m => {
+    Object.keys(m.byRoute).forEach(r => allRoutes.add(r));
+    Object.keys(m.bySource).forEach(s => allSources.add(s));
+  });
+  const routeList = [...allRoutes];
+  const sourceList = [...allSources];
+
+  const header = ['month', 'total_usd', 'claims_count',
+    ...sourceList.map(s => 'source_' + s),
+    ...routeList.map(r => 'route_' + r)];
+  const rows = [header.join(',')];
+  sortedKeys.forEach(key => {
+    const m = byMonth[key];
+    rows.push([
+      key, m.total.toFixed(2), m.count,
+      ...sourceList.map(s => (m.bySource[s] || 0).toFixed(2)),
+      ...routeList.map(r => (m.byRoute[r] || 0).toFixed(2))
+    ].join(','));
+  });
+
+  const csv = rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fehu-monthly-rewards-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  showToast('✓ CSV exported', 'pos');
+}
+window.exportMonthlyRewardsCsv = exportMonthlyRewardsCsv;
+
+
+/* ---------- Settings ---------- */
+function renderSettingsDetail() {
+  const cfg = loadCloudConfig() || {};
+  const hasCloud = !!(cfg.url && cfg.key && cfg.secret);
+  const hasAI = !!aiKey;
+
+  return `
+    <div class="setting-block">
+      <h3>Cloud Sync</h3>
+      <div style="padding: 12px 0;">
+        <div class="flex-row" style="margin-bottom: 10px;">
+          <span class="muted" style="font-size:12px">Status</span>
+          <span class="chip ${hasCloud ? (cloudConnected ? 'is-pos' : '') : 'is-neg'}">
+            ${hasCloud ? (cloudConnected ? '● Connected' : 'Configuring…') : '○ Not configured'}
+          </span>
+        </div>
+        ${lastSyncTime ? `<div class="muted" style="font-size:11px; margin-bottom: 10px;">Last sync: ${fmtRelative(lastSyncTime)}</div>` : ''}
+        <label>Supabase URL</label>
+        <input id="cfUrl" type="text" placeholder="https://xxxxx.supabase.co" value="${escapeHtml(cfg.url || '')}">
+        <label>Anon Key (long, public)</label>
+        <input id="cfKey" type="password" placeholder="eyJ..." value="${escapeHtml(cfg.key || '')}">
+        <label>Secret Passphrase</label>
+        <input id="cfSecret" type="password" placeholder="your shared secret" value="${escapeHtml(cfg.secret || '')}">
+        <div class="muted" style="font-size:11px; margin-top:8px; line-height:1.5;">
+          Use the same URL, key, and secret as on your MacBook to share the database.
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+          <button class="btn" onclick="disconnectCloud()">Disconnect</button>
+          <button class="btn btn-primary" onclick="saveAndConnectCloud()">Save &amp; Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-block">
+      <h3>AI Analyst Key</h3>
+      <div style="padding: 12px 0;">
+        <div class="flex-row" style="margin-bottom: 10px;">
+          <span class="muted" style="font-size:12px">Status</span>
+          <span class="chip ${hasAI ? 'is-pos' : ''}">${hasAI ? '● Key saved' : '○ No key'}</span>
+        </div>
+        <label>Anthropic API Key</label>
+        <input id="setAiKey" type="password" placeholder="sk-ant-..." value="${hasAI ? '••••••••••••' : ''}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+          <button class="btn" onclick="clearAIKey()">Clear</button>
+          <button class="btn btn-primary" onclick="saveAIKeyFromSettings()">Save Key</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-block">
+      <h3>Data</h3>
+      <div class="row">
+        <div>
+          <div>Positions</div>
+          <div class="muted" style="font-size:11px">${state.positions.length} total · ${state.positions.filter(p=>p.status==='active').length} active</div>
+        </div>
+        <div class="mono">${(new Blob([JSON.stringify(state)]).size / 1024).toFixed(1)} KB</div>
+      </div>
+      <div class="row">
+        <div>
+          <div>Transactions</div>
+          <div class="muted" style="font-size:11px">${(state.transactions || []).length} events</div>
+        </div>
+        <div class="mono">${(state.snapshots || []).length} snaps</div>
+      </div>
+      <div style="padding: 12px 0;">
+        <button class="btn btn-block" onclick="exportData()">Export JSON</button>
+      </div>
+    </div>
+
+    <div class="setting-block">
+      <h3>About</h3>
+      <div class="row">
+        <span class="muted">Build</span>
+        <span class="mono">Mobile v2.0 · syncs v37</span>
+      </div>
+      <div class="row">
+        <span class="muted">Data model</span>
+        <span class="mono">fehu_fund_v1</span>
+      </div>
+      <div style="padding: 12px 0;">
+        <div class="muted" style="font-size:12px; line-height: 1.6;">
+          Fehu Invest · Private DeFi capital vehicle.<br>
+          Designed for the long horizon. Built by Ivan with Claude.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveAndConnectCloud() {
+  const url = document.getElementById('cfUrl').value.trim();
+  const key = document.getElementById('cfKey').value.trim();
+  const secret = document.getElementById('cfSecret').value.trim();
+  if (!url || !key || !secret) { showToast('Fill all three fields', 'neg'); return; }
+  if (!url.startsWith('https://') || !url.includes('.supabase.co')) { showToast('URL should look like https://xxx.supabase.co', 'neg'); return; }
+  saveCloudConfig({ url, key, secret });
+  showToast('Connecting to cloud…');
+  initCloud({ url, key, secret }).then(ok => {
+    if (ok) {
+      showToast('✓ Connected', 'pos');
+      openMore('settings');
+    }
+  });
+}
+window.saveAndConnectCloud = saveAndConnectCloud;
+
+function disconnectCloud() {
+  if (!confirm('Disconnect from cloud sync? Local data stays untouched.')) return;
+  clearCloudConfig();
+  if (cloudSubscription) {
+    try { supabaseClient.removeChannel(cloudSubscription); } catch(e) {}
+  }
+  supabaseClient = null;
+  cloudConnected = false;
+  updateCloudIndicator();
+  openMore('settings');
+  showToast('Disconnected from cloud');
+}
+window.disconnectCloud = disconnectCloud;
+
+function clearAIKey() {
+  if (!confirm('Clear the saved AI key?')) return;
+  localStorage.removeItem(ANTHROPIC_KEY_K);
+  aiKey = '';
+  openMore('settings');
+  showToast('AI key cleared');
+}
+window.clearAIKey = clearAIKey;
+
+function saveAIKeyFromSettings() {
+  const v = document.getElementById('setAiKey').value.trim();
+  if (!v || v.startsWith('••')) { showToast('Enter a new key', 'neg'); return; }
+  if (!v.startsWith('sk-ant-')) { showToast('Key should start with sk-ant-', 'neg'); return; }
+  localStorage.setItem(ANTHROPIC_KEY_K, v);
+  aiKey = v;
+  openMore('settings');
+  showToast('✓ AI key saved', 'pos');
+}
+window.saveAIKeyFromSettings = saveAIKeyFromSettings;
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fehu-fund-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  showToast('✓ Data exported', 'pos');
+}
+window.exportData = exportData;
+
+/* ===================================================================
+   CLOUD SYNC — compatible with desktop v35.1 fund_state table
+=================================================================== */
+let supabaseClient = null;
+let cloudSubscription = null;
+let cloudPushTimer = null;
+let cloudLastPushedJson = null;
+let cloudConnected = false;
+
+function loadCloudConfig() {
+  try {
+    const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return null;
+}
+function saveCloudConfig(cfg) {
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cfg));
+}
+function clearCloudConfig() {
+  localStorage.removeItem(CLOUD_CONFIG_KEY);
+}
+
+async function initCloud(cfg) {
+  if (!cfg || !cfg.url || !cfg.key || !cfg.secret) return false;
+  if (typeof supabase === 'undefined') {
+    console.error('Supabase SDK not loaded');
+    showToast('Supabase SDK not loaded — check internet', 'neg');
+    return false;
+  }
+  try {
+    supabaseClient = supabase.createClient(cfg.url, cfg.key, {
+      realtime: { params: { eventsPerSecond: 10 } }
+    });
+    updateCloudIndicator('syncing');
+
+    // Pull
+    const remote = await pullFromCloud(cfg.secret);
+    if (remote && remote.data) {
+      const localCount = (state.positions || []).length;
+      const remoteCount = (remote.data.positions || []).length;
+      const localUpdatedAt = state.fund?.lastSyncedAt ? new Date(state.fund.lastSyncedAt) : new Date(0);
+      const remoteUpdatedAt = new Date(remote.updated_at);
+
+      if (remoteCount > 0 && (localCount === 0 || remoteUpdatedAt > localUpdatedAt)) {
+        state = normalizeState(remote.data);
+        state.fund.lastSyncedAt = remote.updated_at;
+        saveStateLocalOnly();
+        renderActiveScreen();
+        lastSyncTime = new Date().toISOString();
+      } else if (localCount > 0) {
+        await pushToCloud(cfg.secret);
+      }
+    } else if ((state.positions || []).length > 0) {
+      await pushToCloud(cfg.secret);
+    }
+
+    // Subscribe to realtime changes
+    if (cloudSubscription) {
+      try { await supabaseClient.removeChannel(cloudSubscription); } catch(e) {}
+    }
+    let debounce, pending = false;
+    cloudSubscription = supabaseClient
+      .channel('fund-state-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fund_state' }, async () => {
+        if (pending) return;
+        pending = true;
+        clearTimeout(debounce);
+        debounce = setTimeout(async () => {
+          pending = false;
+          try {
+            const r = await pullFromCloud(cfg.secret);
+            if (!r || !r.data) return;
+            const rj = JSON.stringify(r.data);
+            if (rj === cloudLastPushedJson) return; // own write echo
+            if (rj === JSON.stringify(state)) return;
+            state = normalizeState(r.data);
+            state.fund.lastSyncedAt = r.updated_at;
+            saveStateLocalOnly();
+            renderActiveScreen();
+            lastSyncTime = new Date().toISOString();
+            showToast('Synced from MacBook', 'pos');
+          } catch(e) { console.warn('rt pull', e); }
+        }, 700);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          cloudConnected = true;
+          updateCloudIndicator('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          updateCloudIndicator('error');
+        }
+      });
+
+    return true;
+  } catch (e) {
+    console.error('initCloud', e);
+    updateCloudIndicator('error');
+    return false;
+  }
+}
+
+async function pullFromCloud(secret) {
+  if (!supabaseClient) return null;
+  try {
+    const { data, error } = await supabaseClient
+      .from('fund_state')
+      .select('data, updated_at, secret')
+      .eq('id', 'main')
+      .maybeSingle();
+    if (error) { console.warn('pull', error); return null; }
+    if (!data) return null;
+    if (data.secret !== secret) {
+      updateCloudIndicator('error');
+      showToast('Secret mismatch — wrong passphrase', 'neg');
+      return null;
+    }
+    return data;
+  } catch(e) { console.warn('pull fail', e); return null; }
+}
+
+async function pushToCloud(secret) {
+  if (!supabaseClient || !secret) return false;
+  try {
+    const payload = JSON.stringify(state);
+    cloudLastPushedJson = payload;
+    const { error } = await supabaseClient
+      .from('fund_state')
+      .upsert({
+        id: 'main',
+        data: state,
+        updated_at: new Date().toISOString(),
+        secret: secret
+      }, { onConflict: 'id' });
+    if (error) { console.warn('push', error); return false; }
+    lastSyncTime = new Date().toISOString();
+    return true;
+  } catch(e) { console.warn('push fail', e); return false; }
+}
+
+function scheduleCloudPush() {
+  if (!cloudConnected) return;
+  const cfg = loadCloudConfig();
+  if (!cfg) return;
+  clearTimeout(cloudPushTimer);
+  updateCloudIndicator('syncing');
+  cloudPushTimer = setTimeout(async () => {
+    await pushToCloud(cfg.secret);
+    updateCloudIndicator('connected');
+  }, 1200);
+}
+
+function saveStateLocalOnly() {
+  try {
+    const json = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, json);
+    localStorage.setItem(BACKUP_KEY, json);
+  } catch(e) { console.error('local save', e); }
+}
+
+function updateCloudIndicator(status) {
+  const btn = document.getElementById('cloudIndicator');
+  const dot = document.getElementById('cloudDot');
+  if (!btn || !dot) return;
+  if (status === 'connected') {
+    btn.classList.add('is-on');
+    dot.style.background = 'var(--pos)';
+    dot.style.boxShadow = '0 0 8px var(--pos)';
+  } else if (status === 'syncing') {
+    btn.classList.add('is-on');
+    dot.style.background = 'var(--accent)';
+    dot.style.boxShadow = '0 0 8px var(--accent-glow)';
+  } else if (status === 'error') {
+    btn.classList.remove('is-on');
+    dot.style.background = 'var(--neg)';
+    dot.style.boxShadow = '';
+  } else {
+    btn.classList.remove('is-on');
+    dot.style.background = 'var(--ink-mute)';
+    dot.style.boxShadow = '';
+  }
+}
+
+async function manualSync() {
+  const cfg = loadCloudConfig();
+  if (!cfg) {
+    showToast('Set up cloud sync in More → Settings', 'neg');
+    return;
+  }
+  const btn = document.getElementById('syncBtn');
+  btn.style.transform = 'rotate(360deg)';
+  btn.style.transition = 'transform 0.8s';
+  setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 850);
+  if (!supabaseClient) { await initCloud(cfg); return; }
+  updateCloudIndicator('syncing');
+  const r = await pullFromCloud(cfg.secret);
+  if (r && r.data) {
+    state = normalizeState(r.data);
+    saveStateLocalOnly();
+    renderActiveScreen();
+    lastSyncTime = new Date().toISOString();
+    showToast('✓ Pulled latest from cloud', 'pos');
+  }
+  updateCloudIndicator(cloudConnected ? 'connected' : 'idle');
+}
+window.manualSync = manualSync;
+
+function openCloudStatus() {
+  const cfg = loadCloudConfig();
+  if (!cfg) {
+    openSheet(`
+      <div class="sheet-title">Cloud Sync</div>
+      <div class="sheet-sub">Not configured</div>
+      <div style="font-size: 13px; line-height: 1.6; color: var(--ink-dim); padding: 8px 0 12px;">
+        Set up cloud sync to share data with your MacBook.
+      </div>
+      <button class="btn btn-primary btn-block" onclick="closeSheet(); switchScreen('more'); setTimeout(()=>openMore('settings'),200)">Open Settings</button>
+    `);
+    return;
+  }
+  openSheet(`
+    <div class="sheet-title">Cloud Sync</div>
+    <div class="sheet-sub">${cloudConnected ? '● Connected' : '○ Disconnected'}</div>
+    <div class="sheet-row"><span class="lbl">Database</span><span class="val" style="font-size:11px">${escapeHtml((cfg.url||'').replace('https://','').split('.')[0])}…</span></div>
+    <div class="sheet-row"><span class="lbl">Last sync</span><span class="val">${lastSyncTime ? fmtRelative(lastSyncTime) : 'never'}</span></div>
+    <div class="sheet-row"><span class="lbl">Positions</span><span class="val">${state.positions.length}</span></div>
+    <div class="sheet-row"><span class="lbl">Transactions</span><span class="val">${(state.transactions||[]).length}</span></div>
+    <div class="sheet-actions">
+      <button class="btn" onclick="closeSheet()">Close</button>
+      <button class="btn btn-primary" onclick="closeSheet(); manualSync()">Pull Now</button>
+    </div>
+  `);
+}
+window.openCloudStatus = openCloudStatus;
+
+
+/* ===================================================================
+   PULL-TO-REFRESH
+=================================================================== */
+function setupPullToRefresh() {
+  let startY = 0, currentY = 0, dragging = false, threshold = 80;
+  let indicator = null;
+
+  document.querySelectorAll('.screen').forEach(scr => {
+    scr.addEventListener('touchstart', (e) => {
+      if (scr.scrollTop > 4) return;
+      startY = e.touches[0].clientY;
+      dragging = true;
+      if (indicator) { indicator.remove(); indicator = null; }
+    }, { passive: true });
+
+    scr.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      currentY = e.touches[0].clientY;
+      const dy = currentY - startY;
+      if (dy < 8) return;
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'ptr-indicator is-show';
+        indicator.innerHTML = '⟳';
+        scr.appendChild(indicator);
+      }
+      const pull = Math.min(dy, threshold * 1.6);
+      indicator.style.transform = `translateX(-50%) translateY(${Math.min(pull, 50)}px)`;
+      indicator.style.opacity = String(Math.min(dy / threshold, 1));
+    }, { passive: true });
+
+    scr.addEventListener('touchend', () => {
+      if (!dragging) return;
+      const dy = currentY - startY;
+      dragging = false;
+      if (dy >= threshold) {
+        if (indicator) indicator.classList.add('is-spin');
+        manualSync().finally(() => {
+          if (indicator) indicator.remove();
+          indicator = null;
+        });
+      } else {
+        if (indicator) indicator.remove();
+        indicator = null;
+      }
+      startY = 0; currentY = 0;
+    });
+  });
+}
+
+/* ===================================================================
+   BOOTSTRAP
+=================================================================== */
+async function boot() {
+  // Initial state already loaded
+  renderHome();
+  setupPullToRefresh();
+
+  // Try to connect cloud silently
+  const cfg = loadCloudConfig();
+  if (cfg) {
+    initCloud(cfg).then(ok => {
+      if (!ok) updateCloudIndicator('error');
+    });
+  } else {
+    updateCloudIndicator('idle');
+  }
+
+  // PWA service worker
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('sw.js');
+      console.log('[PWA] Service worker registered');
+    } catch(e) {
+      console.warn('[PWA] SW registration failed', e);
+    }
+  }
+
+  // Hide loader, reveal app
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('fade-out');
+    document.getElementById('app').style.opacity = '1';
+    setTimeout(() => { document.getElementById('loader').remove(); }, 500);
+  }, 500);
+}
+
+window.addEventListener('load', boot);
+
+/* ===================================================================
+   GLOBAL SAFETY: prevent zoom on double-tap inside app
+=================================================================== */
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+let lastTouch = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouch < 300) {
+    e.preventDefault();
+  }
+  lastTouch = now;
+}, { passive: false });
+
+</script>
+</body>
+</html>
