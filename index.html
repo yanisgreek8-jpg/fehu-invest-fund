@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.3.0</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.3.1</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -15421,20 +15421,22 @@ function computeDailyIncomeSeries(snapshots, days) {
       realIncome = curr.realIncome;
       unrealizedPnl = curr.unrealizedPnl;
     } else {
-      // Estimate: assume each day earns a steady daily real income (avg expected yield),
-      // and the rest is unrealized P&L. If we have the global ratio, apply it; otherwise
-      // assume all is unrealized when the day is negative, all is real when positive.
-      if (dailyIncome >= 0 && isFinite(realRatio) && realRatio >= 0 && realRatio <= 1) {
-        realIncome = dailyIncome * realRatio;
-        unrealizedPnl = dailyIncome * (1 - realRatio);
-      } else if (dailyIncome < 0) {
-        // Estimate expected daily real income from active positions' APR
-        const expectedDailyReal = estimateExpectedDailyRealIncome();
+      // v37.3.1: FIX — use theoretical expected yield (APR-based) as cap for realIncome.
+      // When unrealizedPnl is negative cumulative, realRatio goes < 0 and the old code
+      // fell through to "realIncome = dailyIncome" which mis-classified price recovery
+      // as real income. Now we cap real at theoretical yield in both directions.
+      const expectedDailyReal = estimateExpectedDailyRealIncome();
+
+      if (dailyIncome >= 0) {
+        // Real income capped at expected theoretical yield;
+        // anything above is treated as price recovery / unrealized.
+        realIncome = Math.min(dailyIncome, expectedDailyReal);
+        unrealizedPnl = dailyIncome - realIncome;
+      } else {
+        // Negative day: real income still accrues (PTs always pay), so we credit
+        // theoretical yield as real, and the rest goes to unrealized loss.
         realIncome = expectedDailyReal;
         unrealizedPnl = dailyIncome - expectedDailyReal;
-      } else {
-        realIncome = dailyIncome;
-        unrealizedPnl = 0;
       }
     }
 
