@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.10.2</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.11.0</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -9987,11 +9987,28 @@ function renderTable() {
             return '';
           })()}
           ${(() => {
+            // v37.11: GMX pull button — INDEPENDENT of wallet requirement.
+            // GMX GM positions are tracked by market address (gmxMarket), not by
+            // wallet, so the button must show even when liveTracking.wallet is empty.
+            // Previously this lived inside the `if (liveTracking.wallet)` block and
+            // never appeared for GM positions created via market-picker only.
+            const gmxMkt = (p.liveTracking && p.liveTracking.gmxMarket) || p.gmxMarket;
+            if (p.type === 'GM' && gmxMkt) {
+              let gmxBtns = '';
+              gmxBtns += `<button class="action-btn-inline" onclick="window.pullFromGMX('${p.id}')" title="Pull live GMX data (APY from DefiLlama + market info)" style="background: linear-gradient(135deg, #4FC3F7, #29B6F6); border-color: #29B6F6; color: #fff; font-weight: 700;">⚡ GMX</button>`;
+              gmxBtns += `<button class="action-btn-inline" onclick="window.openPositionRevertModal('${p.id}')" title="Revert to a previous Current Value / Claimable from journal history" style="color: var(--ink-soft);">↶ Revert</button>`;
+              gmxBtns += `<button class="action-btn-inline" onclick="window.openRebalanceModal('${p.id}')" title="Move capital from this position to another (preserves NAV)" style="background: rgba(91,124,250,0.10); border-color: #5C7CFA; color: #4D6EE0; font-weight: 700;">⇄ Rebalance</button>`;
+              return gmxBtns;
+            }
+            return '';
+          })()}
+          ${(() => {
             // Live tracking quick actions (v21+v22)
             if (p.liveTracking && p.liveTracking.wallet) {
               const lt = p.liveTracking;
               const chain = lt.chain || 'ethereum';
               let buttons = '';
+              // v37.5: GMX pull already handled above (independent block) — skip here for GM
               // v36.4: Revert button — restore previous values from journal
               buttons += `<button class="action-btn-inline" onclick="window.openPositionRevertModal('${p.id}')" title="Revert to a previous Current Value / Claimable from journal history" style="color: var(--ink-soft);">↶ Revert</button>`;
               // v37.1: Rebalance button
@@ -10017,10 +10034,7 @@ function renderTable() {
               if ((p.protocol || '').match(/^(aave|morpho|compound|spark|fluid)/i) && (lt.wallet || p.wallet)) {
                 buttons += `<button class="action-btn-inline" onclick="window.pullFromAave('${p.id}')" title="Pull live Aave supply/borrow data + APY" style="background: linear-gradient(135deg, #B197FC, #9775FA); border-color: #B197FC; color: #fff; font-weight: 700;">⚡ Aave</button>`;
               }
-              // v37.5: GMX pull button — for GM positions
-              if (p.type === 'GM' && (lt.gmxMarket || p.gmxMarket)) {
-                buttons += `<button class="action-btn-inline" onclick="window.pullFromGMX('${p.id}')" title="Pull live GMX data (APY from DefiLlama + market info)" style="background: linear-gradient(135deg, #4FC3F7, #29B6F6); border-color: #29B6F6; color: #fff; font-weight: 700;">⚡ GMX</button>`;
-              }
+              // v37.11: GMX pull button handled in independent block above (no wallet needed)
               // Krystal button: best for Uniswap LP positions
               if (p.type === 'LP' || p.type === 'LP-Pendle' || lt.mode === 'link-krystal') {
                 buttons += `<button class="action-btn-inline" onclick="window.openKrystalPopup('${lt.wallet}','${chain}')" title="View on Krystal (best for Uniswap LP)" style="border-color: var(--accent-deep); color: var(--accent-deep);">🔮 Krystal</button>`;
@@ -20386,29 +20400,39 @@ window.openDeBankPopup = function(wallet, chain) {
 
 /* ---------- Full re-render ---------- */
 function renderAll() {
-  recordSnapshot();
-  saveState();
-  renderFundIdentity();
-  renderNAV();
-  renderEquityChart();
-  renderPieChart();
-  renderAssetBreakdown();
-  renderTreasury();
-  renderAnnual();
-  renderMaturity();
-  renderDrawdownAndRisk();
-  renderFilters();
-  renderTable();
-  renderTransactions();
-  renderQuarterSelector();
-  renderQuarterlyLetter();
-  renderDistributions();
-  renderAttribution();
-  renderNavBadges();
-  wireContribButton();
+  // v37.11: Every render call is individually guarded. Previously the first
+  // ~17 renders (renderTable, renderDistributions/Capital flows, etc.) ran
+  // WITHOUT try/catch, so a single runtime error in any one of them aborted
+  // renderAll() entirely — blanking out every section below it (Income tracker,
+  // Capital flows, Cumulative income, etc.). Now a failure in one section is
+  // logged and skipped, and all other sections still render.
+  const guard = (name, fn) => {
+    try { fn(); } catch (e) { console.error('[renderAll] ' + name + ' failed:', e); }
+  };
+
+  guard('recordSnapshot', recordSnapshot);
+  guard('saveState', saveState);
+  guard('renderFundIdentity', renderFundIdentity);
+  guard('renderNAV', renderNAV);
+  guard('renderEquityChart', renderEquityChart);
+  guard('renderPieChart', renderPieChart);
+  guard('renderAssetBreakdown', renderAssetBreakdown);
+  guard('renderTreasury', renderTreasury);
+  guard('renderAnnual', renderAnnual);
+  guard('renderMaturity', renderMaturity);
+  guard('renderDrawdownAndRisk', renderDrawdownAndRisk);
+  guard('renderFilters', renderFilters);
+  guard('renderTable', renderTable);
+  guard('renderTransactions', renderTransactions);
+  guard('renderQuarterSelector', renderQuarterSelector);
+  guard('renderQuarterlyLetter', renderQuarterlyLetter);
+  guard('renderDistributions', renderDistributions);
+  guard('renderAttribution', renderAttribution);
+  guard('renderNavBadges', renderNavBadges);
+  guard('wireContribButton', wireContribButton);
   // v37.2.0: Header + Add capital button + Auto-price button
   if (typeof wireContribHeaderButton === 'function') {
-    wireContribHeaderButton();
+    guard('wireContribHeaderButton', wireContribHeaderButton);
   }
   var autoPriceBtn = document.getElementById('cf_autoPriceBtn');
   if (autoPriceBtn && !autoPriceBtn._wired) {
@@ -20420,27 +20444,27 @@ function renderAll() {
   }
   // v30.5: Income tracker
   if (typeof renderIncomeTracker === 'function') {
-    try { renderIncomeTracker(); } catch (e) { console.warn('Income tracker render failed', e); }
+    guard('renderIncomeTracker', renderIncomeTracker);
   }
   // v37.3.0: Position History Chart
   if (typeof renderPositionHistoryChart === 'function') {
-    try { renderPositionHistoryChart(); } catch (e) { console.warn('Position history chart render failed', e); }
+    guard('renderPositionHistoryChart', renderPositionHistoryChart);
   }
   // v31: Rewards ledger
   if (typeof renderRewards === 'function') {
-    try { renderRewards(); } catch (e) { console.warn('Rewards render failed', e); }
+    guard('renderRewards', renderRewards);
   }
   // v37: Monthly Rewards Report
   if (typeof renderMonthlyRewardsReport === 'function') {
-    try { renderMonthlyRewardsReport(); } catch (e) { console.warn('Monthly rewards report render failed', e); }
+    guard('renderMonthlyRewardsReport', renderMonthlyRewardsReport);
   }
   // v35.3: Out-of-range alert banner
   if (typeof renderOutOfRangeAlert === 'function') {
-    try { renderOutOfRangeAlert(); } catch (e) { console.warn('Out-of-range alert render failed', e); }
+    guard('renderOutOfRangeAlert', renderOutOfRangeAlert);
   }
   // v37.1: PT Expiry alert banner
   if (typeof renderPtExpiryAlert === 'function') {
-    try { renderPtExpiryAlert(); } catch (e) { console.warn('PT expiry alert render failed', e); }
+    guard('renderPtExpiryAlert', renderPtExpiryAlert);
   }
 }
 
