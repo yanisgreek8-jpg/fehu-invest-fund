@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.4</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.6</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -8978,6 +8978,7 @@ function loadState() {
       if (!parsed.contributions) parsed.contributions = [];
       if (!parsed.idleTreasury) parsed.idleTreasury = [];
       migrateContributionsToIdle(parsed); // v37.7
+      migrateOldClaimTxs(parsed);          // v37.14.5
       return parsed;
     }
     const backup = localStorage.getItem(BACKUP_KEY);
@@ -8990,6 +8991,7 @@ function loadState() {
       if (!parsed.contributions) parsed.contributions = [];
       if (!parsed.idleTreasury) parsed.idleTreasury = [];
       migrateContributionsToIdle(parsed); // v37.7
+      migrateOldClaimTxs(parsed);          // v37.14.5
       return parsed;
     }
   } catch (e) {
@@ -9036,6 +9038,31 @@ function migrateContributionsToIdle(s) {
   });
   if (added > 0) {
     console.log('[Migration v37.7] Created', added, 'idle treasury items from orphan contributions');
+  }
+}
+
+// v37.14.5: backfill `type` field on old claim transactions so they appear
+// in Rewards Ledger. Pre-v37.14.5 logTx wrote `action: 'claim'` but no `type`,
+// and getClaimEvents filters by `tx.type === 'claim'`. Result: old claims
+// were invisible in Rewards Ledger / Monthly Rewards Report.
+function migrateOldClaimTxs(s) {
+  if (!Array.isArray(s.transactions)) return;
+  let fixed = 0;
+  s.transactions.forEach(function(tx) {
+    if (tx.action === 'claim' && !tx.type) {
+      tx.type = 'claim';
+      tx.date = tx.date || tx.timestamp;
+      fixed++;
+    }
+    // Same for claim-reward action variant
+    if (tx.action === 'claim-reward' && !tx.type) {
+      tx.type = 'claim';
+      tx.date = tx.date || tx.timestamp;
+      fixed++;
+    }
+  });
+  if (fixed > 0) {
+    console.log('[Migration v37.14.5] Backfilled type=claim on', fixed, 'old transactions');
   }
 }
 function saveState() {
@@ -12110,13 +12137,15 @@ document.getElementById('claimConfirmBtn').addEventListener('click', () => {
     document.getElementById('f_deposited').value = amount.toFixed(2);
     document.getElementById('f_currentValue').value = amount.toFixed(2);
     document.getElementById('f_notes').value = `Funded from claim on ${p.protocol} · ${p.asset} (${fmtUSD(amount, true)})`;
-    // Log the claim itself
-    logTx('claim', p, { note: `Claimed ${fmtUSD(amount, true)} → opening new position` });
+    // Log the claim itself — v37.14.5: include amount so Rewards Ledger sees it
+    logTx('claim', p, { amount: amount, note: `Claimed ${fmtUSD(amount, true)} → opening new position` });
     showToast('Claim recorded · fill in the new position');
     return;
   }
 
-  logTx('claim', p, { note: txNote });
+  // v37.14.5+: include amount + asset + route so Monthly Rewards Report
+  // correctly attributes claim to month, source (protocol), and route (where it went)
+  logTx('claim', p, { amount: amount, asset: p.asset, route: claimRoute, note: txNote });
   document.getElementById('claimModal').classList.remove('open');
   saveState();
   renderAll();
@@ -21193,19 +21222,35 @@ function deletePosition(id) {
 /* ---------- Transactions log ---------- */
 function logTx(action, position, extra = {}) {
   const safe = position || {};
+  // v37.14.5: write BOTH `action` and `type` so Rewards Ledger filter
+  // (which uses tx.type) finds claim events. Also write `date` alongside
+  // `timestamp` for getClaimEvents() date filter compat.
+  // For claim events specifically, prefer extra.amount (the actual claimed
+  // USD value) over the auto-derived currentValue, because by the time
+  // logTx fires, position.claimable has already been reset to 0.
+  const now = new Date().toISOString();
+  let txAmount;
+  if (action === 'claim') {
+    txAmount = (extra.amount !== undefined && extra.amount !== null) ? +extra.amount : 0;
+  } else if (position) {
+    txAmount = (action === 'open') ? +position.deposited : (+position.currentValue + +(position.claimable || 0));
+  } else {
+    txAmount = extra.amount || 0;
+  }
   state.transactions.unshift({
     id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-    timestamp: new Date().toISOString(),
+    timestamp: now,
+    date: now,                      // alias for getClaimEvents/getWithdrawalEvents date filter
     action: action,
+    type: action,                   // alias for Rewards Ledger filter (tx.type === 'claim')
     positionId: safe.id || null,
-    position: safe.id || null, // v36.4: alias for compat with claim-tx style filtering
+    position: safe.id || null,
     protocol: safe.protocol || '—',
-    asset: safe.asset || '—',
-    type: safe.type || '—',
-    amount: position
-      ? (action === 'open' ? +position.deposited : (+position.currentValue + +(position.claimable || 0)))
-      : (extra.amount || 0),
-    // v36.4: snapshot raw position values for Revert
+    asset: extra.asset || safe.asset || '—',
+    rewardType: extra.rewardType || (safe.type === 'LP' || safe.type === 'LP-Pendle' ? 'lp_fees' : 'other'),
+    type_pos: safe.type || '—',     // position strategy type, renamed to avoid clash with action-type
+    amount: txAmount,
+    route: extra.route || null,     // v37.14.5+: destination of claim (wallet/treasury/reinvest/position/new) for Monthly Rewards Report
     currentValue: position ? (+position.currentValue || 0) : null,
     claimable: position ? (+position.claimable || 0) : null,
     pnl: extra.pnl,
