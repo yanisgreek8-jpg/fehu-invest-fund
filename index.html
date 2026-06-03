@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.11</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.12</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -9061,7 +9061,8 @@ function migrateContributionsToIdle(s) {
    свежих позиций (≤30 дней) с фантомным годовым возвратом >100%. */
 function autoFixVolatileBasis(s) {
   if (!Array.isArray(s.positions)) return;
-  if (s._volatileBasisFixedAt) return; // уже починили, не трогаем
+  // v37.14.12: используем версию фикса как guard. Если флаг от старой версии — игнорируем.
+  if (s._volatileBasisFixVersion === '37.14.12') return;
   let fixed = 0;
   s.positions.forEach(p => {
     if (p.status !== 'active') return;
@@ -9090,8 +9091,10 @@ function autoFixVolatileBasis(s) {
   });
   if (fixed > 0) {
     s._volatileBasisFixedAt = new Date().toISOString();
-    console.log('[AutoFix v37.14.11] Fixed', fixed, 'volatile-lending position(s)');
+    console.log('[AutoFix v37.14.12] Fixed', fixed, 'volatile-lending position(s)');
   }
+  // ставим версию даже если ничего не пофиксили — чтобы не гонять впустую
+  s._volatileBasisFixVersion = '37.14.12';
 }
 
 /* ---------- v37.14.11: Clean broken rateJournal entries ----------
@@ -22123,7 +22126,12 @@ async function initCloud(cfg) {
         if (!state.snapshots) state.snapshots = [];
         if (!state.fund) state.fund = defaultState().fund;
         state.fund.lastSyncedAt = remote.updated_at;
+        // v37.14.12: re-run auto-fixes AFTER cloud pull (cloud may carry phantom-APR positions)
+        try { autoFixVolatileBasis(state); } catch(e) { console.warn('autoFix after cloud pull failed', e); }
+        try { cleanBrokenRateJournals(state); } catch(e) {}
         saveState();
+        // v37.14.12: push corrected state back to cloud so other devices see fix
+        try { if (typeof scheduleCloudPush === 'function') scheduleCloudPush(); } catch(e) {}
         renderAll();
       } else if (localCount > 0) {
         // Local is newer or equal → push
@@ -22184,6 +22192,9 @@ async function initCloud(cfg) {
               if (!state.snapshots) state.snapshots = [];
               if (!state.fund) state.fund = defaultState().fund;
               state.fund.lastSyncedAt = remote.updated_at;
+              // v37.14.12: re-run auto-fixes after realtime pull
+              try { autoFixVolatileBasis(state); } catch(e) {}
+              try { cleanBrokenRateJournals(state); } catch(e) {}
               // v37.0.4 fix: prevent ping-pong cycle
               // We just pulled from cloud — DON'T push it back. Save to localStorage
               // only, skip scheduleCloudPush.
