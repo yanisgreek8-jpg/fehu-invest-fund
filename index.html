@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.9</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.10</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -6577,6 +6577,7 @@
     <div class="live-rate-actions">
       <button class="btn" id="liveRefreshBtn" title="Pull current rates & prices from public APIs">🔄 Refresh rates</button>
       <button class="btn" id="krystalSyncAllBtn" title="Pull all Krystal-tracked LP positions" style="border-color: var(--accent-deep); color: var(--accent-deep);">⚡ Sync Krystal</button>
+      <button class="btn" id="fixBasisBtn" title="Выровнять deposited = currentValue для BTC/ETH lending позиций (убирает фантомный APR от volatility базового актива)" style="display:none; border-color:#D4A858; color:#9A7B33;">🩹 Fix basis</button>
       <button class="btn" id="krystalApiKeyBtn" title="Manage Krystal API key">🔑</button>
       <button class="btn" id="liveSettingsBtn" title="Auto-refresh settings">⚙</button>
     </div>
@@ -20605,6 +20606,10 @@ function renderAll() {
   if (typeof renderPtExpiryAlert === 'function') {
     guard('renderPtExpiryAlert', renderPtExpiryAlert);
   }
+  // v37.14.10: refresh fix-basis button visibility
+  if (typeof window._refreshFixBasisBtn === 'function') {
+    guard('refreshFixBasisBtn', window._refreshFixBasisBtn);
+  }
 }
 
 /* ---------- Annual / Quarterly breakdown ---------- */
@@ -21249,7 +21254,75 @@ function deletePosition(id) {
   if (p) logTx('delete', p);
   state.positions = state.positions.filter(p => p.id !== id);
   renderAll();
+  saveState();
   showToast('Position deleted');
+}
+
+/* ---------- v37.14.10: Fix basis for BTC/ETH lending positions ----------
+   Aave/Compound lending of volatile assets (cbBTC, WBTC, ETH) creates phantom APR
+   because deposited is recorded at one price but currentValue reflects today's price.
+   This aligns deposited = currentValue at the moment of fix, killing the phantom return
+   while preserving honest forward yield tracking. */
+function findBasisFixCandidates() {
+  return (state.positions || []).filter(p => {
+    if (p.status !== 'active') return false;
+    const asset = (p.asset || '').toLowerCase();
+    const type = (p.type || '').toLowerCase();
+    const isVolatileAsset = /(btc|eth|sol|arb|wsteth|reth|cbbtc|wbtc)/.test(asset);
+    const isLending = type === 'lend' || type === 'lending' || (p.protocol||'').toLowerCase() === 'aave';
+    if (!(isVolatileAsset && isLending)) return false;
+    const dep = +p.deposited || 0;
+    const cur = +p.currentValue || 0;
+    if (dep === 0 || cur === 0) return false;
+    const days = (Date.now() - new Date(p.entryDate).getTime()) / 86400000;
+    if (days > 7) return false; // только для свежих позиций где APR ещё разогнан
+    const pctGain = ((cur - dep) / dep) * 100;
+    const annualized = pctGain * (365 / Math.max(days, 1));
+    return Math.abs(annualized) > 100; // фантомный APR > 100%
+  });
+}
+function fixBasisForVolatileLending() {
+  const candidates = findBasisFixCandidates();
+  if (!candidates.length) { showToast('Нет позиций требующих fix'); return; }
+  const names = candidates.map(p => p.protocol + ' · ' + p.asset).join(', ');
+  if (!confirm('Выровнять deposited = currentValue для:\n\n' + names + '\n\nЭто уберёт фантомный APR (volatility базового актива). Реальный APR от Aave начнёт считаться с этого момента.')) return;
+  let fixed = 0;
+  candidates.forEach(p => {
+    const oldDep = +p.deposited || 0;
+    const newDep = +p.currentValue || 0;
+    p.deposited = newDep;
+    p.updatedAt = new Date().toISOString();
+    // Запись в журнал транзакций для прозрачности
+    try {
+      logTx('basis-fix', p, {
+        oldDeposited: oldDep,
+        newDeposited: newDep,
+        reason: 'Volatility de-noising for ' + p.asset + ' lending position'
+      });
+    } catch(e) {}
+    fixed++;
+  });
+  renderAll();
+  saveState();
+  showToast('✓ Basis выровнен · ' + fixed + ' позиций · APR обнулится');
+}
+function initFixBasisBtn() {
+  const btn = document.getElementById('fixBasisBtn');
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  const refresh = () => {
+    const hits = findBasisFixCandidates();
+    btn.style.display = hits.length ? 'inline-flex' : 'none';
+    if (hits.length) btn.textContent = '🩹 Fix basis (' + hits.length + ')';
+  };
+  refresh();
+  window._refreshFixBasisBtn = refresh;
+  btn.addEventListener('click', fixBasisForVolatileLending);
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initFixBasisBtn);
+} else {
+  initFixBasisBtn();
 }
 
 /* ---------- Transactions log ---------- */
