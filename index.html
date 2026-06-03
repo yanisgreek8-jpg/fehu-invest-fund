@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.8</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.9</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -10386,17 +10386,20 @@ function renderRateList() {
   }
 
   // Sort chronologically
-  const sorted = [...editingRateJournal].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...editingRateJournal]
+    .filter(e => e && e.date && typeof e.rate === 'number' && isFinite(e.rate)) // v37.14.9: drop broken entries
+    .sort((a, b) => a.date.localeCompare(b.date));
   const maxRate = Math.max(...sorted.map(e => Math.abs(e.rate)), 1);
 
   sorted.forEach((entry, idx) => {
     const item = document.createElement('div');
     item.className = 'rate-item';
-    const pct = Math.min(100, (Math.abs(entry.rate) / maxRate) * 100);
+    const rate = +entry.rate || 0;
+    const pct = Math.min(100, (Math.abs(rate) / maxRate) * 100);
     item.innerHTML = `
       <span class="rate-item-date">${fmtDateShort(entry.date)}</span>
       <div class="rate-item-bar" style="--pct: ${pct.toFixed(1)}%"></div>
-      <span class="rate-item-pct ${entry.rate >= 0 ? 'pos' : 'neg'}">${entry.rate.toFixed(2)}%</span>
+      <span class="rate-item-pct ${rate >= 0 ? 'pos' : 'neg'}">${rate.toFixed(2)}%</span>
       <button type="button" class="rate-item-del" data-idx="${idx}" title="Remove">×</button>
     `;
     list.appendChild(item);
