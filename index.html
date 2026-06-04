@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.13</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.15</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -6578,6 +6578,7 @@
       <button class="btn" id="liveRefreshBtn" title="Pull current rates & prices from public APIs">🔄 Refresh rates</button>
       <button class="btn" id="krystalSyncAllBtn" title="Pull all Krystal-tracked LP positions" style="border-color: var(--accent-deep); color: var(--accent-deep);">⚡ Sync Krystal</button>
       <button class="btn" id="fixBasisBtn" title="Выровнять deposited = currentValue для BTC/ETH lending позиций (убирает фантомный APR от volatility базового актива)" style="display:none; border-color:#D4A858; color:#9A7B33;">🩹 Fix basis</button>
+      <button class="btn" id="recoverSnusdBtn" title="Восстановить sNUSD redemption $5,097.17 в idle treasury (одноразовая кнопка)" style="background: rgba(91,124,250,0.10); border-color:#5C7CFA; color:#4D6EE0;">💰 Recover sNUSD $5,097</button>
       <button class="btn" id="krystalApiKeyBtn" title="Manage Krystal API key">🔑</button>
       <button class="btn" id="liveSettingsBtn" title="Auto-refresh settings">⚙</button>
     </div>
@@ -8176,19 +8177,26 @@
     </p>
 
     <div class="claim-options">
+      <label class="claim-option" data-redeem-route="idle">
+        <div class="claim-option-header">
+          <span class="claim-option-radio"></span>
+          <span class="claim-option-title">Keep in idle treasury (recommended)</span>
+        </div>
+        <div class="claim-option-desc">Proceeds become part of fund's idle pool. Can be redeployed, swapped or withdrawn later. NAV preserved.</div>
+      </label>
       <label class="claim-option" data-redeem-route="wallet">
         <div class="claim-option-header">
           <span class="claim-option-radio"></span>
-          <span class="claim-option-title">To wallet (realized)</span>
+          <span class="claim-option-title">To wallet (withdrawal)</span>
         </div>
-        <div class="claim-option-desc">Proceeds rest in wallet. Position closes.</div>
+        <div class="claim-option-desc">Proceeds leave the fund — recorded as a distribution. NAV decreases.</div>
       </label>
       <label class="claim-option" data-redeem-route="new">
         <div class="claim-option-header">
           <span class="claim-option-radio"></span>
           <span class="claim-option-title">Rolled into a new position</span>
         </div>
-        <div class="claim-option-desc">Already deployed elsewhere — open a new entry afterwards.</div>
+        <div class="claim-option-desc">Already deployed elsewhere — proceeds go to idle, then open a new entry afterwards.</div>
       </label>
     </div>
 
@@ -12316,15 +12324,51 @@ document.getElementById('redeemConfirmBtn').addEventListener('click', () => {
   p.claimable = 0;
   p.status = 'closed';
   p.updatedAt = new Date().toISOString();
-  p.notes = (p.notes || '') + (p.notes ? '\n' : '') + `Redeemed at maturity ${new Date().toISOString().slice(0,10)} — proceeds ${redeemRoute === 'wallet' ? 'to wallet' : 'rolled into a new position'}`;
+
+  // v37.14.14: actually move money. Before, redeem only closed the position
+  // without putting proceeds anywhere — NAV/Capital flows showed nothing.
+  let routeNote = '';
+  if (redeemRoute === 'idle' || redeemRoute === 'new') {
+    // Money flows into fund's idle treasury — NAV preserved (internal transfer)
+    if (!Array.isArray(state.idleTreasury)) state.idleTreasury = [];
+    const underlyingAsset = p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC');
+    state.idleTreasury.push({
+      id: 'idle_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      asset: underlyingAsset,
+      units: redemption, // PT settlements are typically in stables; if not, user can adjust
+      usdValue: redemption,
+      source: 'pt-redemption',
+      note: `PT redemption from ${p.protocol} · ${p.asset}`,
+      createdAt: new Date().toISOString(),
+      sourceRef: p.id
+    });
+    routeNote = redeemRoute === 'new'
+      ? 'proceeds → idle, ready to deploy into a new position'
+      : 'proceeds → idle treasury';
+  } else if (redeemRoute === 'wallet') {
+    // Money leaves the fund — record as distribution so Capital flows reflects it
+    if (!Array.isArray(state.distributions)) state.distributions = [];
+    state.distributions.push({
+      id: 'dist_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      date: new Date().toISOString().slice(0,10),
+      amount: redemption,
+      asset: p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC'),
+      note: `PT redemption withdrawal · ${p.protocol} · ${p.asset}`,
+      createdAt: new Date().toISOString(),
+      sourceRef: p.id
+    });
+    routeNote = 'proceeds withdrawn to wallet (distribution)';
+  }
+
+  p.notes = (p.notes || '') + (p.notes ? '\n' : '') + `Redeemed at maturity ${new Date().toISOString().slice(0,10)} — ${routeNote}`;
 
   const c = calcPosition(p);
-  logTx('redeem', p, { pnl: c.pnl, note: `Redeemed at maturity · ${fmtUSD(redemption, true)} · ${redeemRoute}` });
+  logTx('redeem', p, { pnl: c.pnl, amount: redemption, route: redeemRoute, note: `Redeemed at maturity · ${fmtUSD(redemption, true)} · ${routeNote}` });
 
   document.getElementById('redeemModal').classList.remove('open');
   saveState();
   renderAll();
-  showToast(`Redemption recorded · ${fmtUSD(redemption, true)} realized`);
+  showToast(`Redemption recorded · ${fmtUSD(redemption, true)} · ${redeemRoute === 'wallet' ? 'withdrawn' : '→ idle'}`);
 });
 
 
@@ -20696,6 +20740,10 @@ function renderAll() {
   if (typeof window._refreshFixBasisBtn === 'function') {
     guard('refreshFixBasisBtn', window._refreshFixBasisBtn);
   }
+  // v37.14.14: refresh recover-snusd button visibility
+  if (typeof window._refreshRecoverSnusdBtn === 'function') {
+    guard('refreshRecoverSnusdBtn', window._refreshRecoverSnusdBtn);
+  }
 }
 
 /* ---------- Annual / Quarterly breakdown ---------- */
@@ -21409,6 +21457,58 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initFixBasisBtn);
 } else {
   initFixBasisBtn();
+}
+
+/* ---------- v37.14.14: One-shot recovery for sNUSD redemption that
+     was lost by the old redeem flow (closed position but didn't move money).
+     Self-disables after one successful recovery via flag in state. */
+function initRecoverSnusdBtn() {
+  const btn = document.getElementById('recoverSnusdBtn');
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  const refresh = () => {
+    // Скрыть если уже восстановили
+    if (state._snusdRecovered) { btn.style.display = 'none'; return; }
+    // Скрыть если в idle уже есть pt-redemption запись для sNUSD
+    const already = (state.idleTreasury||[]).some(i =>
+      i.source === 'pt-redemption' && /snusd/i.test(i.note||'')
+    );
+    if (already) { btn.style.display = 'none'; state._snusdRecovered = true; saveState(); return; }
+    btn.style.display = 'inline-flex';
+  };
+  refresh();
+  window._refreshRecoverSnusdBtn = refresh;
+  btn.addEventListener('click', () => {
+    if (!confirm('Добавить $5,097.17 USDC в idle treasury как восстановление sNUSD redemption?\n\nКнопка исчезнет после нажатия.')) return;
+    try {
+      if (!Array.isArray(state.idleTreasury)) state.idleTreasury = [];
+      const amount = 5097.17;
+      state.idleTreasury.push({
+        id: 'idle_recover_snusd_' + Date.now().toString(36),
+        asset: 'USDC',
+        units: amount,
+        usdValue: amount,
+        source: 'pt-redemption',
+        note: 'PT redemption from Pendle · sNUSD (recovered via one-shot fix v37.14.14)',
+        createdAt: new Date().toISOString()
+      });
+      state._snusdRecovered = true;
+      saveState();
+      try { if (typeof scheduleCloudPush === 'function') scheduleCloudPush(); } catch(e){}
+      renderAll();
+      refresh();
+      showToast('✓ sNUSD redemption восстановлен · $5,097.17 → idle');
+      console.log('[Recovery v37.14.14] sNUSD $5,097.17 added to idle');
+    } catch (err) {
+      console.error('[Recovery] FATAL', err);
+      alert('Ошибка восстановления: ' + err.message);
+    }
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initRecoverSnusdBtn);
+} else {
+  initRecoverSnusdBtn();
 }
 
 /* ---------- Transactions log ---------- */
