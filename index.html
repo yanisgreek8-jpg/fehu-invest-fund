@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.16</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.17</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -10262,11 +10262,19 @@ function renderTable() {
               if (lt.mode === 'link-krystal') {
                 buttons += `<button class="action-btn-inline" onclick="window.pullFromKrystal('${p.id}')" title="Pull live data from Krystal API (updates CV + fees)" style="background: rgba(212,168,88,0.15); border-color: var(--accent-deep); color: var(--accent-deep); font-weight: 700;">⚡ Pull</button>`;
 
-                // v35.3: Roll-to-spot button — only when position is out-of-range
+                // v37.14.17: Roll-to-spot теперь доступен для ЛЮБОЙ LP с Krystal,
+                // не только out-of-range — для случаев когда юзер сам решает выйти
+                // в один актив (например, ETH пробил нижнюю границу и весь LP в ETH)
                 const ld = lt.liveData;
-                if (ld && (ld.rangeStatus === 'out-of-range' || ld.rangeStatus === 'OUT_RANGE')) {
-                  buttons += `<button class="action-btn-inline" onclick="window.openRollToSpotModal('${p.id}')" title="Convert out-of-range LP into a spot hold of the single asset" style="background: linear-gradient(135deg, rgba(168,51,27,0.15), rgba(212,168,88,0.15)); border-color: var(--neg); color: var(--neg); font-weight: 700;">⇨ Roll to spot</button>`;
-                }
+                const isOOR = ld && (ld.rangeStatus === 'out-of-range' || ld.rangeStatus === 'OUT_RANGE');
+                const rollStyle = isOOR
+                  ? 'background: linear-gradient(135deg, rgba(168,51,27,0.15), rgba(212,168,88,0.15)); border-color: var(--neg); color: var(--neg); font-weight: 700;'
+                  : 'background: rgba(168,51,27,0.08); border-color: var(--neg); color: var(--neg);';
+                const rollLabel = isOOR ? '⇨ Roll to spot' : '⇨ Exit to single asset';
+                const rollTitle = isOOR
+                  ? 'Convert out-of-range LP into a spot hold of the single asset'
+                  : 'Exit LP into a single-asset spot hold (use when you closed LP and are fully in one token)';
+                buttons += `<button class="action-btn-inline" onclick="window.openRollToSpotModal('${p.id}')" title="${rollTitle}" style="${rollStyle}">${rollLabel}</button>`;
               }
               // Pendle pull button (v30): for PT positions with Pendle URL
               if (p.type === 'PT' && (lt.pendleUrl || p.pendleUrl)) {
@@ -24061,27 +24069,37 @@ window.openRollToSpotModal = function(positionId) {
   const p = state.positions.find(x => x.id === positionId);
   if (!p) { alert('Position not found'); return; }
   const ld = p.liveTracking?.liveData;
-  if (!ld) { alert('No live data for this position. Pull from Krystal first.'); return; }
 
-  // Determine which asset the LP is now holding (the dominant one after going OOR)
-  const composition = Array.isArray(ld.composition) ? ld.composition : [];
-  const dominant = composition
+  // v37.14.17: graceful fallback if no Krystal composition data —
+  // user manually picks which asset & how much they ended up with.
+  const composition = Array.isArray(ld?.composition) ? ld.composition : [];
+  let dominant = composition
     .filter(c => c.amount > 0 && c.valueUsd > 0.5)
     .sort((a, b) => b.valueUsd - a.valueUsd)[0];
 
+  // Если Krystal не дал composition — берём пару из asset (например "WETH/USDC")
+  // и предлагаем юзеру выбрать. По дефолту берём первый токен пары.
+  let assets = [];
   if (!dominant) {
-    alert('Cannot determine composition. Pull fresh Krystal data first.');
-    return;
+    const pair = (p.asset || '').split('/').map(s => s.trim()).filter(Boolean);
+    if (pair.length === 2) {
+      assets = pair;
+    } else {
+      // Один токен или непонятный формат — даём общие варианты
+      assets = ['ETH', 'USDC', 'WBTC', 'cbBTC', 'USDT', 'WETH'];
+    }
+    // dominant заглушка — реально юзер выберет в форме
+    dominant = { symbol: assets[0], amount: 0, valueUsd: +p.currentValue || 0 };
   }
+  const isManualMode = !composition.length || !ld;
 
-  // Current state for the modal
-  const currentValue = +p.currentValue || ld.currentPositionValue || 0;
-  const claimable = +p.claimable || ld.feesUsd || 0;
+  const currentValue = +p.currentValue || ld?.currentPositionValue || 0;
+  const claimable = +p.claimable || ld?.feesUsd || 0;
   const deposited = +p.deposited || 0;
   const principalPnl = currentValue - deposited;
-  const sinceStr = p.liveTracking.outOfRangeSince
+  const sinceStr = p.liveTracking?.outOfRangeSince
     ? new Date(p.liveTracking.outOfRangeSince).toLocaleString()
-    : 'unknown';
+    : 'manually triggered';
 
   let modal = document.getElementById('rollToSpotModal');
   if (modal) modal.remove();
@@ -24098,22 +24116,53 @@ window.openRollToSpotModal = function(positionId) {
       <div class="modal-body">
 
         <div style="padding: 14px; background: rgba(168,51,27,0.05); border-left: 3px solid var(--neg); border-radius: 4px; margin-bottom: 18px;">
-          <div style="font-size: 11px; color: var(--neg); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;">⚠ Out of range since ${sinceStr}</div>
+          <div style="font-size: 11px; color: var(--neg); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;">${isOOR ? '⚠ Out of range since ' + sinceStr : '⇨ Manual LP exit'}</div>
           <div style="font-size: 13px; color: var(--ink-soft); line-height: 1.5;">
-            Position <strong>${p.asset}</strong> on ${p.protocol} has exited its price range. Fees stopped accruing.
-            Currently the LP holds <strong>~${dominant.amount.toFixed(dominant.symbol === 'USDC' || dominant.symbol === 'USDT' ? 2 : 6)} ${dominant.symbol}</strong> (≈$${dominant.valueUsd.toFixed(2)}).
+            ${isManualMode
+              ? `Position <strong>${p.asset}</strong> on ${p.protocol}. You're recording an LP exit into a single asset (e.g. LP broke lower bound and is now fully in one token). Pick which token below.`
+              : `Position <strong>${p.asset}</strong> on ${p.protocol} has exited its price range. Fees stopped accruing. Currently the LP holds <strong>~${dominant.amount.toFixed(dominant.symbol === 'USDC' || dominant.symbol === 'USDT' ? 2 : 6)} ${dominant.symbol}</strong> (≈$${dominant.valueUsd.toFixed(2)}).`}
           </div>
         </div>
+
+        ${isManualMode ? `
+        <div style="padding: 14px; background: var(--surface-alt); border-radius: 4px; margin-bottom: 18px;">
+          <div style="font-size: 11px; letter-spacing: 0.08em; color: var(--ink-soft); text-transform: uppercase; font-weight: 700; margin-bottom: 10px;">Exit details</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Asset received</label>
+              <select id="rollManualAsset" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+                ${assets.map((a, i) => `<option value="${a}"${i===0?' selected':''}>${a}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">USD value received</label>
+              <input type="number" id="rollManualUsd" step="0.01" value="${currentValue.toFixed(2)}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Token amount (units)</label>
+              <input type="number" id="rollManualAmount" step="0.000001" placeholder="e.g. 5.234" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Effective entry price</label>
+              <div id="rollEffPrice" style="padding: 8px; background: rgba(212,168,88,0.10); border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-deep); font-weight: 600;">— enter amount</div>
+            </div>
+          </div>
+          <div style="margin-top: 10px; padding: 8px 10px; background: rgba(91,124,250,0.05); border-radius: 3px; font-size: 11px; color: var(--ink-soft);">
+            💡 Cost basis для нового спота = USD value. Эффективная цена входа = USD ÷ amount. Будет видна в Holdings.
+          </div>
+        </div>
+        ` : ''}
 
         <h3 style="font-family: 'Playfair Display', serif; font-size: 16px; font-style: italic; margin: 16px 0 10px 0;">What this does</h3>
         <ul style="font-size: 12px; color: var(--ink-soft); line-height: 1.7; padding-left: 20px; margin-bottom: 18px;">
           <li>Archives <strong>${p.asset}</strong> LP with status <code>rolled</code> — historical P&amp;L, fees and snapshots preserved for analysis.</li>
-          <li>Creates a new <strong>${dominant.symbol} spot</strong> position with $${currentValue.toFixed(2)} principal, APR 0%.</li>
-          <li>Records the link in Journal: "LP exit at out-of-range → ${dominant.symbol} spot hold".</li>
+          <li>Creates a new <strong>${isManualMode ? 'single-asset' : dominant.symbol} spot</strong> position with $${currentValue.toFixed(2)} principal, APR 0%.</li>
+          <li>Records the link in Journal: "LP exit → ${isManualMode ? 'single-asset' : dominant.symbol} spot hold".</li>
           <li><strong>NAV is preserved</strong> — this is an internal transfer, not a cashflow event.</li>
           <li>You can later "Deploy" the spot hold into Aave / Pendle / new LP from the position card.</li>
         </ul>
 
+        ${!isManualMode ? `
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 14px; background: var(--surface-alt); border-radius: 4px; margin-bottom: 18px;">
           <div>
             <div style="font-size: 9px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 4px;">From — LP archived</div>
@@ -24132,6 +24181,7 @@ window.openRollToSpotModal = function(positionId) {
             </div>
           </div>
         </div>
+        ` : ''}
 
         <div style="display: flex; align-items: flex-start; gap: 8px; padding: 12px; background: rgba(91,124,250,0.05); border-left: 2px solid #5C7CFA; border-radius: 4px; font-size: 11px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 8px;">
           <input type="checkbox" id="rollClaimFees" ${claimable > 0.5 ? 'checked' : ''} style="margin-top: 2px;">
@@ -24148,12 +24198,61 @@ window.openRollToSpotModal = function(positionId) {
         <div></div>
         <div class="modal-actions-right">
           <button class="btn" onclick="document.getElementById('rollToSpotModal').remove()">Cancel</button>
-          <button class="btn btn-primary" id="rollToSpotConfirmBtn" onclick="window.confirmRollToSpot('${p.id}', '${dominant.symbol}', ${dominant.amount}, ${currentValue})">⇨ Roll to ${dominant.symbol} spot</button>
+          <button class="btn btn-primary" id="rollToSpotConfirmBtn">⇨ ${isManualMode ? 'Confirm exit' : 'Roll to ' + dominant.symbol + ' spot'}</button>
         </div>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+
+  // v37.14.17: confirm handler — reads manual inputs if present
+  const confirmBtn = document.getElementById('rollToSpotConfirmBtn');
+  confirmBtn.addEventListener('click', () => {
+    let finalSymbol = dominant.symbol;
+    let finalAmount = dominant.amount;
+    let finalUsd = currentValue;
+    if (isManualMode) {
+      const sel = document.getElementById('rollManualAsset');
+      const usdEl = document.getElementById('rollManualUsd');
+      const amtEl = document.getElementById('rollManualAmount');
+      finalSymbol = sel?.value || finalSymbol;
+      finalUsd = parseFloat(usdEl?.value) || currentValue;
+      finalAmount = parseFloat(amtEl?.value) || 0;
+      if (finalAmount <= 0) {
+        alert('Введи количество ' + finalSymbol + ' которое получил на руки');
+        amtEl?.focus();
+        return;
+      }
+      if (finalUsd <= 0) {
+        alert('Введи USD value полученного актива');
+        usdEl?.focus();
+        return;
+      }
+    }
+    window.confirmRollToSpot(p.id, finalSymbol, finalAmount, finalUsd);
+  });
+
+  // Live effective price calculation
+  if (isManualMode) {
+    const usdEl = document.getElementById('rollManualUsd');
+    const amtEl = document.getElementById('rollManualAmount');
+    const priceEl = document.getElementById('rollEffPrice');
+    const selEl = document.getElementById('rollManualAsset');
+    const updatePrice = () => {
+      const u = parseFloat(usdEl.value) || 0;
+      const a = parseFloat(amtEl.value) || 0;
+      const sym = selEl.value || '?';
+      if (a > 0 && u > 0) {
+        const price = u / a;
+        priceEl.textContent = '$' + price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' / ' + sym;
+      } else {
+        priceEl.textContent = '— enter amount';
+      }
+    };
+    usdEl.addEventListener('input', updatePrice);
+    amtEl.addEventListener('input', updatePrice);
+    selEl.addEventListener('change', updatePrice);
+  }
 };
 
 window.confirmRollToSpot = async function(positionId, symbol, amount, principalUsd) {
