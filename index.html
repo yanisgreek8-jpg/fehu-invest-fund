@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.17</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.20</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -9090,6 +9090,7 @@ function backfillPtYieldClaims(s) {
       id: 'tx_ptyield_' + p.id + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
       action: 'claim',
       type: 'claim',
+      subtype: 'pt-yield-realized', // v37.14.18
       positionId: p.id,
       protocol: p.protocol,
       asset: p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC'),
@@ -9624,13 +9625,17 @@ function renderNAV() {
   // v37.3.2: NAV must include idle treasury — without this, external deposits
   // recorded to "wallet" destination don't increase NAV until deployed to a position.
   const idleBalance = (typeof getIdleTotal === 'function') ? getIdleTotal() : 0;
-  // Also include contribution-sourced idle in the deposited base (so Total Return
-  // doesn't mis-classify fresh capital as profit). Only idle that came from
-  // external contributions counts — claimed rewards already accrued from positions.
-  const contribIdle = (state.idleTreasury || [])
-    .filter(function(i) { return i.source === 'contribution'; })
+  // v37.14.20: Cost basis должен включать ВСЕ источники idle, КРОМЕ чистой прибыли.
+  // - 'contribution' → внешний капитал, входит в базис
+  // - 'pt-redemption' → возврат принципала + накопленный yield, базис тот же
+  // - 'lp-exit' → выход из LP в один актив, тот же базис
+  // - 'rebalance' → перенос между позициями, базис тот же
+  // - 'claim-reward' → это уже заработанные деньги поверх базиса, НЕ включаем
+  const PROFIT_SOURCES = ['claim-reward', 'claim', 'reward'];
+  const principalIdle = (state.idleTreasury || [])
+    .filter(function(i) { return !PROFIT_SOURCES.includes(i.source); })
     .reduce(function(s, i) { return s + (+i.usdValue || 0); }, 0);
-  totals.deposited += contribIdle;
+  totals.deposited += principalIdle;
   const nav = totals.current + totals.claimable + idleBalance;
   const pnl = nav - totals.deposited;
   const pnlPct = totals.deposited > 0 ? (pnl / totals.deposited) * 100 : 0;
@@ -12429,6 +12434,7 @@ document.getElementById('redeemConfirmBtn').addEventListener('click', () => {
     const yieldRoute = redeemRoute === 'wallet' ? 'wallet' : 'idle';
     logTx('claim', p, {
       type: 'claim',
+      subtype: 'pt-yield-realized', // v37.14.18: помечаем чтобы не дублировать в claimed
       amount: ptYield,
       asset: p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC'),
       route: yieldRoute,
@@ -12672,14 +12678,9 @@ function getTotalValue() {
 
 function getOriginalCapitalDeployed() {
   // v37.9 — Fixed logic for cost basis.
-  // Previous bug: as soon as user recorded ONE contribution (e.g. $2,750),
-  // the formula switched to using only that contribution as cost basis,
-  // ignoring the $30k+ already deployed in positions. This produced a fake
-  // "1000% return" because NAV - $2750 was treated as profit.
+  // v37.14.20 — также учитываем principal-источники idle (pt-redemption, lp-exit, contribution).
   // Correct logic: use MAX of (a) explicit contributions total, (b) sum of
-  // deposited from positions. Reason: contributions track inflows from outside
-  // the fund, but if positions were initially funded BEFORE contributions
-  // started being tracked, their `deposited` field carries the true cost basis.
+  // deposited from positions + principal idle.
   const contribTotal = getContributionsTotal();
   const positionsDeployed = (state.positions || []).reduce((s, p) => {
     const orig = (p.originalDeposited !== undefined && p.originalDeposited !== null)
@@ -12687,8 +12688,14 @@ function getOriginalCapitalDeployed() {
       : (+p.deposited || 0);
     return s + orig;
   }, 0);
+  // v37.14.20: idle от PT redemption / LP exit / rebalance — это сохранённый базис,
+  // не считаем его прибылью. Только claim-reward — это чистый профит.
+  const PROFIT_SOURCES = ['claim-reward', 'claim', 'reward'];
+  const principalIdle = (state.idleTreasury || [])
+    .filter(i => !PROFIT_SOURCES.includes(i.source))
+    .reduce((s, i) => s + (+i.usdValue || 0), 0);
 
-  return Math.max(contribTotal, positionsDeployed);
+  return Math.max(contribTotal, positionsDeployed + principalIdle);
 }
 
 /* === CONTRIBUTION MODAL & LOGIC === */
@@ -16863,6 +16870,24 @@ function computeDailyIncomeSeries(snapshots, days) {
       }
     }
 
+    // v37.14.18: Clamp massive daily price Δ as data anomalies.
+    // If a single day shows price movement > 30% of prev NAV, that's not market
+    // movement — that's a data migration / restore / fix. Real BTC moves <10% in a day,
+    // diversified portfolios <5%. Treat such days as anomalies, zero out the unrealized,
+    // and mark for tooltip transparency.
+    const prevNav = Math.max(1, prevTotal);
+    const anomalyThresholdPct = 0.30; // 30% of NAV
+    const anomalyThresholdAbs = Math.abs(unrealizedPnl) / prevNav;
+    let dataAnomaly = false;
+    if (anomalyThresholdAbs > anomalyThresholdPct) {
+      dataAnomaly = true;
+      console.warn('[v37.14.18] Daily Δ anomaly suppressed:', curr.date,
+        'price Δ=' + unrealizedPnl.toFixed(2), '(' + (anomalyThresholdAbs * 100).toFixed(0) + '% of prev NAV)');
+      // Zero out — this is not market movement, it's a base shift
+      unrealizedPnl = 0;
+      // realIncome stays — that's still tied to expected yield
+    }
+
     series.push({
       date: curr.date,
       income: dailyIncome,
@@ -16876,6 +16901,7 @@ function computeDailyIncomeSeries(snapshots, days) {
       interpolated: !!curr.interpolated,
       smoothed: !!curr.smoothing,
       hasAnomalies: Array.isArray(curr.anomalies) && curr.anomalies.length > 0,
+      dataAnomaly: dataAnomaly, // v37.14.18
       smoothingCredits: !!curr.smoothingCredits,
       byProtocol: curr.byProtocol || {}
     });
@@ -19458,6 +19484,9 @@ function computeRewardsBySource(periodDays) {
   // Add claimed amounts from transactions
   const claims = getClaimEvents(periodDays);
   claims.forEach(tx => {
+    // v37.14.18: skip synthetic PT yield claims — they're already in `earned` via PnL.
+    // Adding them to `claimed` would double-count.
+    if (tx.subtype === 'pt-yield-realized') return;
     const proto = tx.protocol || (tx.position && getPositionById(tx.position)?.protocol) || 'Other';
     if (!sources[proto]) {
       sources[proto] = { earned: 0, claimed: 0, pending: 0, positionCount: 0, positions: [], type: tx.rewardType || 'other' };
@@ -21766,28 +21795,31 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
         // If this is a PT position and it hasn't been synced for > 1 day,
         // distribute the accrued yield back across the missing days as
         // smoothing credits so the bar chart doesn't show a fake spike.
+        // v37.14.19: use lastCvUpdateAt (set only on actual CV changes) instead of
+        // updatedAt (which ticks on any edit, breaking the "days since last sync" math).
         try {
           if (prev.type === 'PT') {
-            const lastSync = prev.liveTracking?.lastSync || prev.updatedAt;
-            const daysSince = lastSync ? Math.floor((Date.now() - new Date(lastSync).getTime()) / 86400000) : 0;
+            const lastCvUpdate = prev.lastCvUpdateAt || prev.liveTracking?.lastSync || prev.entryDate;
+            const daysSince = lastCvUpdate
+              ? Math.max(1, Math.round((Date.now() - new Date(lastCvUpdate).getTime()) / 86400000))
+              : 1;
             const delta = newCV - prevCV;
             // Smooth only if: > 1 day since last sync, delta is positive (yield),
             // and there's no obvious price drop signal
             if (daysSince > 1 && delta > 0 && delta < (prevCV * 0.1)) {
               smoothPtYieldAcrossDays(merged, delta, daysSince, 'PT');
+              console.log('[Smoothing v37.14.19] PT', prev.asset, '+$' + delta.toFixed(2),
+                'distributed over', daysSince, 'days ($' + (delta/daysSince).toFixed(2) + '/day)');
             }
           }
 
           // v36.2 — Defense 2b: Smoothing for late LP fees updates
-          // When LP `claimable` jumps after a manual PULL/edit, the fees were
-          // actually accruing over multiple days. Distribute them back so today
-          // doesn't get all the credit.
           if (prev.type === 'LP' || prev.type === 'LP-Pendle') {
-            const lastSync = prev.liveTracking?.lastSync || prev.updatedAt;
-            const daysSince = lastSync ? Math.floor((Date.now() - new Date(lastSync).getTime()) / 86400000) : 0;
+            const lastFeesUpdate = prev.lastClaimUpdateAt || prev.liveTracking?.lastSync || prev.entryDate;
+            const daysSince = lastFeesUpdate
+              ? Math.max(1, Math.round((Date.now() - new Date(lastFeesUpdate).getTime()) / 86400000))
+              : 1;
             const feesDelta = newClaim - prevClaim;
-            // Smooth only if fees went UP (not claimed). Skip if there's a
-            // claim transaction today (claim doesn't generate new income).
             const today = new Date().toISOString().slice(0, 10);
             const claimedToday = Array.isArray(state.transactions) && state.transactions.some(tx =>
               (tx.type === 'claim' || tx.type === 'claim-reward') &&
@@ -21796,9 +21828,20 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
             );
             if (daysSince > 1 && feesDelta > 0 && !claimedToday) {
               smoothPtYieldAcrossDays(merged, feesDelta, daysSince, 'LP-fees');
+              console.log('[Smoothing v37.14.19] LP fees', prev.asset, '+$' + feesDelta.toFixed(2),
+                'distributed over', daysSince, 'days');
             }
           }
         } catch (e) { console.warn('[Smoothing] failed', e); }
+
+        // v37.14.19: track timestamps for CV/claim changes so next smoothing knows the real span
+        if (Math.abs(prevCV - newCV) > 0.01) {
+          merged.lastCvUpdateAt = new Date().toISOString();
+        }
+        if (Math.abs(prevClaim - newClaim) > 0.01) {
+          merged.lastClaimUpdateAt = new Date().toISOString();
+        }
+        state.positions[idx] = merged;
       }
     }
     showToast('Position updated');
