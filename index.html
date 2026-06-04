@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.15</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.14.16</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -8990,6 +8990,7 @@ function loadState() {
       migrateOldClaimTxs(parsed);          // v37.14.5
       autoFixVolatileBasis(parsed);        // v37.14.11
       cleanBrokenRateJournals(parsed);     // v37.14.11
+      backfillPtYieldClaims(parsed);       // v37.14.16
       return parsed;
     }
     const backup = localStorage.getItem(BACKUP_KEY);
@@ -9005,6 +9006,7 @@ function loadState() {
       migrateOldClaimTxs(parsed);          // v37.14.5
       autoFixVolatileBasis(parsed);        // v37.14.11
       cleanBrokenRateJournals(parsed);     // v37.14.11
+      backfillPtYieldClaims(parsed);       // v37.14.16
       return parsed;
     }
   } catch (e) {
@@ -9062,6 +9064,50 @@ function migrateContributionsToIdle(s) {
 // (e.g. "LP", "PT") instead of the action type — and recover the real claim
 // amount from the note string "Claimed $XX.XX → ..." since old logTx wrote
 // position.currentValue as amount instead of the actual claim amount.
+/* ---------- v37.14.16: Backfill PT yield as claim events ----------
+   Старые redeem-транзакции не писали отдельную claim-запись на сумму yield,
+   поэтому PT yield был невидим в Monthly rewards. Эта миграция находит закрытые
+   PT-позиции с прибылью и дописывает синтетический claim, если его ещё нет. */
+function backfillPtYieldClaims(s) {
+  if (!Array.isArray(s.positions) || !Array.isArray(s.transactions)) return;
+  if (s._ptYieldBackfilled) return;
+  let added = 0;
+  s.positions.forEach(p => {
+    if (p.status !== 'closed') return;
+    if (p.type !== 'PT') return;
+    const deposited = +p.deposited || 0;
+    const redemption = +p.ptRedemption || +p.currentValue || 0;
+    const yield_ = redemption - deposited;
+    if (yield_ < 0.01) return;
+    // Проверяем — нет ли уже claim-записи для этой позиции с пометкой "redemption" или "yield"
+    const already = s.transactions.some(tx =>
+      (tx.type === 'claim' || tx.action === 'claim') &&
+      tx.positionId === p.id &&
+      /yield|redemption/i.test(tx.note || '')
+    );
+    if (already) return;
+    s.transactions.push({
+      id: 'tx_ptyield_' + p.id + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+      action: 'claim',
+      type: 'claim',
+      positionId: p.id,
+      protocol: p.protocol,
+      asset: p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC'),
+      amount: yield_,
+      route: 'idle', // предполагаем что редимнули в idle (наш recommended путь)
+      date: (p.updatedAt || new Date().toISOString()).slice(0,10),
+      timestamp: p.updatedAt || new Date().toISOString(),
+      note: `PT yield realized via redemption · ${fmtUSD ? fmtUSD(yield_, true) : '$'+yield_.toFixed(2)} · ${p.protocol} · ${p.asset} (backfilled v37.14.16)`
+    });
+    added++;
+    console.log('[Backfill v37.14.16] PT yield claim added for', p.asset, ':', yield_);
+  });
+  if (added > 0) {
+    s._ptYieldBackfilled = new Date().toISOString();
+    console.log('[Backfill v37.14.16] Added', added, 'PT yield claim records');
+  }
+}
+
 /* ---------- v37.14.11: AUTO-FIX phantom APR for BTC/ETH lending ----------
    Aave/Compound лендинг волатильных активов (cbBTC, WBTC, ETH) создаёт фантомный APR
    потому что deposited записан по одной цене, а currentValue отражает текущую.
@@ -12365,10 +12411,29 @@ document.getElementById('redeemConfirmBtn').addEventListener('click', () => {
   const c = calcPosition(p);
   logTx('redeem', p, { pnl: c.pnl, amount: redemption, route: redeemRoute, note: `Redeemed at maturity · ${fmtUSD(redemption, true)} · ${routeNote}` });
 
+  // v37.14.16: also log the PT yield (profit = redemption - deposited) as a synthetic
+  // claim event so Monthly rewards report and Rewards Ledger show PT yield as earned.
+  // Without this, PT yield was invisible in rewards (PT yield is paid in the principal,
+  // so there's no separate "claim" event — but it IS earned income).
+  const deposited = +p.deposited || 0;
+  const ptYield = redemption - deposited;
+  if (ptYield > 0.01) {
+    const yieldRoute = redeemRoute === 'wallet' ? 'wallet' : 'idle';
+    logTx('claim', p, {
+      type: 'claim',
+      amount: ptYield,
+      asset: p.underlying === 'Stablecoin' ? 'USDC' : (p.asset || 'USDC'),
+      route: yieldRoute,
+      date: new Date().toISOString().slice(0,10),
+      note: `PT yield realized via redemption · ${fmtUSD(ptYield, true)} · ${p.protocol} · ${p.asset}`
+    });
+    console.log('[Redeem v37.14.16] PT yield logged as claim:', ptYield, p.asset);
+  }
+
   document.getElementById('redeemModal').classList.remove('open');
   saveState();
   renderAll();
-  showToast(`Redemption recorded · ${fmtUSD(redemption, true)} · ${redeemRoute === 'wallet' ? 'withdrawn' : '→ idle'}`);
+  showToast(`Redemption recorded · ${fmtUSD(redemption, true)} · ${redeemRoute === 'wallet' ? 'withdrawn' : '→ idle'}${ptYield > 0.01 ? ' (+' + fmtUSD(ptYield, true) + ' yield)' : ''}`);
 });
 
 
@@ -22248,6 +22313,7 @@ async function initCloud(cfg) {
         // v37.14.12: re-run auto-fixes AFTER cloud pull (cloud may carry phantom-APR positions)
         try { autoFixVolatileBasis(state); } catch(e) { console.warn('autoFix after cloud pull failed', e); }
         try { cleanBrokenRateJournals(state); } catch(e) {}
+        try { backfillPtYieldClaims(state); } catch(e) {}
         saveState();
         // v37.14.12: push corrected state back to cloud so other devices see fix
         try { if (typeof scheduleCloudPush === 'function') scheduleCloudPush(); } catch(e) {}
@@ -22314,6 +22380,7 @@ async function initCloud(cfg) {
               // v37.14.12: re-run auto-fixes after realtime pull
               try { autoFixVolatileBasis(state); } catch(e) {}
               try { cleanBrokenRateJournals(state); } catch(e) {}
+        try { backfillPtYieldClaims(state); } catch(e) {}
               // v37.0.4 fix: prevent ping-pong cycle
               // We just pulled from cloud — DON'T push it back. Save to localStorage
               // only, skip scheduleCloudPush.
