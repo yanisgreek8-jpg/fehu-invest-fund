@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.16.2</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.4</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -9988,31 +9988,58 @@ function renderNAV() {
 /* ---------- Render: Equity Chart ---------- */
 function renderEquityChart() {
   const ctx = document.getElementById('equityChart');
-  const labels = state.snapshots.map(s => s.date);
-  const data = state.snapshots.map(s => s.totalValue);
+  // v37.16.4: detect anomaly snapshots using a wider sliding window.
+  // Anomaly = value differs from neighbors median by more than 25% AND
+  // the difference is large enough (>$3000 absolute) to not just be noise.
+  const sortedSnaps = (state.snapshots || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const smoothedSnaps = sortedSnaps.map((s, i, arr) => {
+    if (i < 1 || i >= arr.length - 1) return s;
+    // Collect up to 3 neighbors on each side (skip the current one)
+    const neighbors = [];
+    for (let k = Math.max(0, i - 3); k <= Math.min(arr.length - 1, i + 3); k++) {
+      if (k === i) continue;
+      const v = arr[k].totalValue;
+      if (typeof v === 'number' && v > 0) neighbors.push(v);
+    }
+    if (neighbors.length < 2) return s;
+    // Median of neighbors
+    neighbors.sort((a, b) => a - b);
+    const median = neighbors[Math.floor(neighbors.length / 2)];
+    const curr = s.totalValue || 0;
+    if (median <= 0) return s;
+    const ratio = Math.abs(curr - median) / median;
+    const absDiff = Math.abs(curr - median);
+    // Anomaly: >25% deviation AND >$3000 absolute diff
+    if (ratio > 0.25 && absDiff > 3000) {
+      return { ...s, totalValue: median, _anomaly: true };
+    }
+    return s;
+  });
+  const labels = smoothedSnaps.map(s => s.date);
+  const data = smoothedSnaps.map(s => s.totalValue);
 
   // v35.4: split into 2 series — real values vs interpolated
   // Each series carries the value where the point belongs and null elsewhere,
   // BUT we leave the boundary point (the real one) in BOTH series so the dashed
   // line connects properly to the solid line without visible gaps.
-  const realData = state.snapshots.map(s => s.interpolated ? null : s.totalValue);
-  const interpData = state.snapshots.map((s, i) => {
+  const realData = smoothedSnaps.map(s => s.interpolated ? null : s.totalValue);
+  const interpData = smoothedSnaps.map((s, i) => {
     if (s.interpolated) return s.totalValue;
     // include boundary: if neighbor is interpolated, keep this real point in interp series too
-    const prev = state.snapshots[i - 1];
-    const next = state.snapshots[i + 1];
+    const prev = smoothedSnaps[i - 1];
+    const next = smoothedSnaps[i + 1];
     if ((prev && prev.interpolated) || (next && next.interpolated)) return s.totalValue;
     return null;
   });
-  const hasInterpolated = state.snapshots.some(s => s.interpolated);
+  const hasInterpolated = smoothedSnaps.some(s => s.interpolated);
 
   // v35.4: Show continuity badge in date range when interpolated snapshots exist
-  const realCount = state.snapshots.filter(s => !s.interpolated).length;
-  const interpCount = state.snapshots.length - realCount;
+  const realCount = smoothedSnaps.filter(s => !s.interpolated).length;
+  const interpCount = smoothedSnaps.length - realCount;
   // v35.5: count server-sourced snapshots
-  const serverCount = state.snapshots.filter(s => s.serverSync || s.source === 'server-cron').length;
+  const serverCount = smoothedSnaps.filter(s => s.serverSync || s.source === 'server-cron').length;
   // v35.6: count user-overridden snapshots
-  const overrideCount = state.snapshots.filter(s => s.userOverride).length;
+  const overrideCount = smoothedSnaps.filter(s => s.userOverride).length;
   let rangeText = '—';
   if (labels.length >= 2) {
     rangeText = `${fmtDateShort(labels[0])} → ${fmtDateShort(labels[labels.length-1])}`;
@@ -22374,7 +22401,28 @@ function renderAnnual() {
 /* ---------- Drawdown chart + Risk stats ---------- */
 function renderDrawdownAndRisk() {
   const ctx = document.getElementById('drawdownChart');
-  const snaps = state.snapshots;
+  // v37.16.4: wider sliding-window anomaly filter.
+  const rawSnaps = state.snapshots || [];
+  const snaps = rawSnaps.slice().sort((a, b) => new Date(a.date) - new Date(b.date)).map((s, i, arr) => {
+    if (i < 1 || i >= arr.length - 1) return s;
+    const neighbors = [];
+    for (let k = Math.max(0, i - 3); k <= Math.min(arr.length - 1, i + 3); k++) {
+      if (k === i) continue;
+      const v = arr[k].totalValue;
+      if (typeof v === 'number' && v > 0) neighbors.push(v);
+    }
+    if (neighbors.length < 2) return s;
+    neighbors.sort((a, b) => a - b);
+    const median = neighbors[Math.floor(neighbors.length / 2)];
+    const curr = s.totalValue || 0;
+    if (median <= 0) return s;
+    const ratio = Math.abs(curr - median) / median;
+    const absDiff = Math.abs(curr - median);
+    if (ratio > 0.25 && absDiff > 3000) {
+      return { ...s, totalValue: median, _anomaly: true, _orig: curr };
+    }
+    return s;
+  });
 
   // Compute drawdown from running peak
   let peak = -Infinity;
@@ -22384,12 +22432,17 @@ function renderDrawdownAndRisk() {
     return { date: s.date, dd };
   });
 
-  // Daily returns for vol & sharpe
+  // Daily returns for vol & sharpe — also use smoothed
   const dailyReturns = [];
   for (let i = 1; i < snaps.length; i++) {
     const prev = snaps[i-1].totalValue;
     const curr = snaps[i].totalValue;
-    if (prev > 0) dailyReturns.push((curr - prev) / prev);
+    if (prev > 0) {
+      const r = (curr - prev) / prev;
+      // Extra safety: clamp insane single-day returns (>50%) — these are still anomalies
+      if (Math.abs(r) > 0.5) continue;
+      dailyReturns.push(r);
+    }
   }
 
   // === Risk stats ===
