@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.15.6</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.2</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -6255,6 +6255,7 @@
       <button class="nav-tab nav-tab-feature" onclick="if(window.openYieldBreakdownModal)window.openYieldBreakdownModal()" data-i18n="subnav.yield" style="background: linear-gradient(135deg, rgba(212,168,88,0.18), rgba(91,124,250,0.08)); border: 1px solid var(--accent-deep);">📅 Yield</button>
       <button class="nav-tab nav-tab-feature" data-scroll-to="section-ai" data-i18n="subnav.aiAnalyst" style="background: linear-gradient(135deg, rgba(212,168,88,0.18), rgba(91,124,250,0.12)); border: 1px solid var(--accent-deep);">🤖 AI Analyst</button>
       <button class="nav-tab nav-tab-feature" data-scroll-to="section-markets" data-i18n="subnav.markets" style="background: linear-gradient(135deg, rgba(91,124,250,0.15), rgba(91,124,250,0.05)); border: 1px solid #5C7CFA; color: #4D6EE0;">🌐 Markets</button>
+      <button class="nav-tab" data-scroll-to="section-audit" style="background: rgba(168,51,27,0.05); border: 1px solid var(--border);"><span>🛡 Audit</span> <span class="nav-tab-badge" id="navBadgeAudit">0</span></button>
     </div>
   </nav>
 
@@ -7184,6 +7185,7 @@
             <th>Month</th>
             <th class="right">Total claimed</th>
             <th class="right">vs prev month</th>
+            <th>Claim dates</th>
             <th>By source</th>
             <th>By route</th>
             <th class="right">Claims count</th>
@@ -7382,6 +7384,63 @@
       <strong>⚠️ Disclaimer:</strong> Markets data is informational only. Always verify yields, TVL, and risks directly on the protocol's official site before deploying capital. APY can change rapidly. DeFi carries smart contract, depeg, and market risks.
     </div>
   </div><!-- /section-group markets -->
+
+  <!-- ============ AUDIT LOG (v37.16.0) ============ -->
+  <div class="section-group section-anchor" id="section-audit" data-section="audit">
+    <div class="section-head">
+      <h2 class="section-title">Audit <em>log</em></h2>
+      <span class="section-meta">Journal of all changes · Last 200 entries · Auto + manual</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px;">
+      <div style="padding: 14px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Total entries</div>
+        <div id="auditTotalCount" style="font-size: 22px; font-weight: 600; font-family: 'Playfair Display', serif;">0</div>
+      </div>
+      <div style="padding: 14px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Today</div>
+        <div id="auditTodayCount" style="font-size: 22px; font-weight: 600; font-family: 'Playfair Display', serif;">0</div>
+      </div>
+      <div style="padding: 14px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Last backup</div>
+        <div id="auditLastBackup" style="font-size: 15px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">—</div>
+        <div id="auditBackupAge" style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">never</div>
+      </div>
+      <div style="padding: 14px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Actions</div>
+        <button class="btn" id="auditExportBtn" style="font-size: 11px; padding: 4px 10px; margin-bottom: 4px;">📤 Export JSON</button>
+        <button class="btn" id="auditClearBtn" style="font-size: 11px; padding: 4px 10px; color: var(--neg);">× Clear log</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="btn audit-filter active" data-filter="all" style="font-size: 11px; padding: 5px 10px;">All</button>
+      <button class="btn audit-filter" data-filter="manual" style="font-size: 11px; padding: 5px 10px;">Manual</button>
+      <button class="btn audit-filter" data-filter="auto" style="font-size: 11px; padding: 5px 10px;">Auto</button>
+      <button class="btn audit-filter" data-filter="position" style="font-size: 11px; padding: 5px 10px;">Positions</button>
+      <button class="btn audit-filter" data-filter="claim" style="font-size: 11px; padding: 5px 10px;">Claims</button>
+      <button class="btn audit-filter" data-filter="savings" style="font-size: 11px; padding: 5px 10px;">Savings</button>
+    </div>
+
+    <div class="table-card">
+      <table id="auditTable">
+        <thead>
+          <tr>
+            <th style="width: 130px;">Time</th>
+            <th style="width: 90px;">Source</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th class="right">Before</th>
+            <th class="right">After</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody">
+          <tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--ink-soft); font-style: italic;">Audit log пуст. Все будущие изменения будут записаны автоматически.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div><!-- /section-group audit -->
 
   <div class="footer-note">
     <div class="footer-mark">
@@ -9391,6 +9450,8 @@ function saveState() {
     localStorage.setItem(STORAGE_KEY, json);
     localStorage.setItem(BACKUP_KEY, json);
     updateStorageStatus();
+    // v37.16.1: Backup reminder check
+    if (typeof checkBackupReminder === 'function') checkBackupReminder();
     // Also push to cloud if connected — UNLESS we just pulled from cloud (v37.0.4)
     if (window._skipNextCloudPush) {
       console.log('[Cloud] Skipping push (state just pulled from cloud)');
@@ -9402,6 +9463,31 @@ function saveState() {
     alert('Saving failed. Browser storage may be full or disabled. Please export your data immediately.');
   }
 }
+
+// v37.16.0: AUDIT LOG — пишет все важные изменения для прозрачности.
+// Помогает отследить когда что менялось и откатить если что.
+function logAudit(action, opts) {
+  if (!state.auditLog) state.auditLog = [];
+  opts = opts || {};
+  const entry = {
+    id: 'aud_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    ts: new Date().toISOString(),
+    action: action, // 'position-create', 'position-edit', 'position-delete', 'claim', 'deploy', 'contribution', 'snapshot-edit', 'restore', 'auto-fix', 'savings-add', 'savings-deploy', 'move-to-savings', 'loan-add', etc.
+    target: opts.target || null, // имя позиции/holding/loan
+    before: opts.before !== undefined ? opts.before : null,
+    after: opts.after !== undefined ? opts.after : null,
+    source: opts.source || 'manual', // manual / auto / migration / restore / cloud-sync
+    note: opts.note || ''
+  };
+  state.auditLog.push(entry);
+  // Keep only last 200 entries
+  if (state.auditLog.length > 200) {
+    state.auditLog = state.auditLog.slice(-200);
+  }
+  // Render if Audit tab is open
+  if (typeof renderAuditLog === 'function') renderAuditLog();
+}
+window.logAudit = logAudit;
 function updateStorageStatus() {
   const el = document.getElementById('storageStatus');
   const size = new Blob([JSON.stringify(state)]).size;
@@ -19913,12 +19999,23 @@ function computeMonthlyRewardsData() {
         total: 0,
         count: 0,
         bySource: {},
-        byRoute: {}
+        byRoute: {},
+        claimDates: [] // v37.16.2: collect unique claim dates
       };
     }
     const m = byMonth[monthKey];
     m.total += amount;
     m.count += 1;
+
+    // v37.16.2: track date of each claim
+    const dateStr = (dateField || '').toString().slice(0, 10);
+    if (dateStr && !m.claimDates.some(d => d.date === dateStr)) {
+      m.claimDates.push({ date: dateStr, amount: amount, source: (tx.protocol || 'Other').toString() });
+    } else if (dateStr) {
+      // Same date — add to existing entry
+      const existing = m.claimDates.find(d => d.date === dateStr);
+      if (existing) existing.amount += amount;
+    }
 
     // Source (protocol)
     const source = (tx.protocol || 'Other').toString().trim() || 'Other';
@@ -19984,7 +20081,7 @@ function renderMonthlyRewardsReport() {
     // Show fallback in UI so user knows something went wrong
     const bodyEl = document.getElementById('monthlyRewardsBody');
     if (bodyEl) {
-      bodyEl.innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--ink-mute);font-size:13px;">Report temporarily unavailable. Check console for details.</td></tr>';
+      bodyEl.innerHTML = '<tr><td colspan="7" style="padding:30px;text-align:center;color:var(--ink-mute);font-size:13px;">Report temporarily unavailable. Check console for details.</td></tr>';
     }
   }
 }
@@ -20054,7 +20151,7 @@ function _renderMonthlyRewardsReportInternal() {
   // ----- Detail table -----
   try {
     if (data.months.length === 0) {
-      bodyEl.innerHTML = '<tr><td colspan="6"><div class="monthly-rewards-empty">No claimed rewards yet. They will appear here once you claim rewards from positions.</div></td></tr>';
+      bodyEl.innerHTML = '<tr><td colspan="7"><div class="monthly-rewards-empty">No claimed rewards yet. They will appear here once you claim rewards from positions.</div></td></tr>';
     } else {
       const rows = data.months.map((m, idx) => {
         // Ensure m has all expected fields
@@ -20109,11 +20206,26 @@ function _renderMonthlyRewardsReportInternal() {
             return `<span class="route-chip ${routeKey}">${escapeHTML(label)} ${fmt(amtNum)}<span class="chip-pct">(${pct.toFixed(0)}%)</span></span>`;
           }).join('');
 
+        // v37.16.2: Claim dates chips (only filled for new claims; old data has empty claimDates)
+        const claimDates = Array.isArray(m.claimDates) ? m.claimDates : [];
+        const dateChips = claimDates.length === 0
+          ? '<span style="color:var(--ink-mute);font-size:11px;">—</span>'
+          : claimDates
+              .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+              .slice(0, 6) // show max 6, with "+N more" if needed
+              .map(cd => {
+                const d = new Date(cd.date);
+                const shortDate = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+                return `<span style="display: inline-block; padding: 2px 6px; margin: 2px; background: rgba(212,168,88,0.08); border: 1px solid var(--accent-deep); border-radius: 3px; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--accent-deep);" title="${escapeHTML(cd.source || '')}: ${fmt(cd.amount)}">${shortDate} · ${fmt(cd.amount)}</span>`;
+              }).join('') +
+            (claimDates.length > 6 ? `<span style="font-size:10px;color:var(--ink-mute);">+${claimDates.length - 6} more</span>` : '');
+
         return `
           <tr>
             <td class="month-name">${escapeHTML(mLabel)}</td>
             <td class="right"><span class="total-cell">${fmt(mTotal)}</span></td>
             <td class="right">${deltaHtml}</td>
+            <td>${dateChips}</td>
             <td>${sourceChips || '<span style="color:var(--ink-mute);font-size:11px;">—</span>'}</td>
             <td>${routeChips || '<span style="color:var(--ink-mute);font-size:11px;">—</span>'}</td>
             <td class="right">${mCount}</td>
@@ -21181,6 +21293,7 @@ window.openSavingsModal = function(existingId) {
     ensureSavingsState();
     const now = new Date().toISOString();
     if (isEdit) {
+      const beforeVal = (+existing.amount || 0) * (+existing.avgCost || 0);
       Object.assign(existing, {
         asset, amount, avgCost,
         currentPrice: curPrice > 0 ? curPrice : existing.currentPrice,
@@ -21188,6 +21301,9 @@ window.openSavingsModal = function(existingId) {
         location, note,
         updatedAt: now
       });
+      if (typeof logAudit === 'function') {
+        logAudit('savings-edit', { target: asset, before: beforeVal, after: amount * avgCost, source: 'manual' });
+      }
     } else {
       state.savings.push({
         id: 'sav_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -21198,6 +21314,9 @@ window.openSavingsModal = function(existingId) {
         createdAt: now,
         updatedAt: now
       });
+      if (typeof logAudit === 'function') {
+        logAudit('savings-add', { target: asset, before: null, after: amount * avgCost, source: 'manual', note: amount + ' ' + asset + ' @ $' + avgCost });
+      }
     }
     document.getElementById('savingsModal').remove();
     saveState();
@@ -21377,6 +21496,15 @@ window.openDeployFromSavingsModal = function(id) {
     });
 
     document.getElementById('deployFromSavModal').remove();
+    if (typeof logAudit === 'function') {
+      logAudit('savings-deploy', {
+        target: h.asset + ' → ' + protocol,
+        before: amount * avgCost,
+        after: deposited,
+        source: 'manual',
+        note: 'Deployed to ' + protocol + ' as ' + assetName + ' · basis ' + (mode === 'preserve' ? 'preserved' : 'reset')
+      });
+    }
     saveState();
     renderAll();
     alert('Готово! Позиция создана в Holdings, актив убран из Savings.');
@@ -21596,6 +21724,15 @@ window.openMoveToSavingsModal = function(positionId) {
     });
 
     document.getElementById('moveSavingsModal').remove();
+    if (typeof logAudit === 'function') {
+      logAudit('move-to-savings', {
+        target: p.asset + ' → ' + asset,
+        before: currentValue,
+        after: amount * avgCost,
+        source: 'manual',
+        note: amount + ' ' + asset + ' moved to Savings · cost basis $' + avgCost.toFixed(2)
+      });
+    }
     saveState();
     renderAll();
     alert('Готово! Позиция в архиве, актив в Savings.');
@@ -21789,6 +21926,9 @@ window.openLoanModal = function(existingId) {
         protocol, startDate, collateralSavingsId: collateralSavingsId || null,
         collateralNote, note, updatedAt: now
       });
+      if (typeof logAudit === 'function') {
+        logAudit('loan-edit', { target: asset + ' @ ' + protocol, before: null, after: usd, source: 'manual', note: rate.toFixed(2) + '% APR' });
+      }
     } else {
       state.loans.push({
         id: 'loan_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -21799,6 +21939,9 @@ window.openLoanModal = function(existingId) {
         status: 'active',
         createdAt: now, updatedAt: now
       });
+      if (typeof logAudit === 'function') {
+        logAudit('loan-add', { target: asset + ' @ ' + protocol, before: null, after: usd, source: 'manual', note: 'Borrowed ' + usd.toFixed(2) + ' at ' + rate.toFixed(2) + '% APR' });
+      }
     }
     document.getElementById('loanModal').remove();
     saveState();
@@ -21822,6 +21965,9 @@ window.repayLoan = function(id) {
   if (!confirm(`Пометить займ ${l.asset} ${fmtUSD(l.usdValue, true)} как погашенный?`)) return;
   l.status = 'repaid';
   l.repaidAt = new Date().toISOString();
+  if (typeof logAudit === 'function') {
+    logAudit('loan-repaid', { target: l.asset + ' @ ' + l.protocol, before: +l.usdValue || 0, after: 0, source: 'manual', note: 'Marked as repaid' });
+  }
   saveState(); renderAll();
 };
 
@@ -21831,6 +21977,196 @@ function wireLoansButtons() {
     addBtn._wired = true;
     addBtn.addEventListener('click', () => window.openLoanModal());
   }
+}
+
+// v37.16.0: AUDIT LOG render + filter
+let _auditCurrentFilter = 'all';
+
+function renderAuditLog() {
+  if (!Array.isArray(state.auditLog)) state.auditLog = [];
+  const all = state.auditLog;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = all.filter(e => (e.ts || '').slice(0, 10) === today).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('auditTotalCount', all.length);
+  set('auditTodayCount', todayCount);
+  const badge = document.getElementById('navBadgeAudit');
+  if (badge) badge.textContent = all.length;
+
+  const lastBackup = localStorage.getItem('fehu_last_backup_at');
+  const lastBackupEl = document.getElementById('auditLastBackup');
+  const ageEl = document.getElementById('auditBackupAge');
+  if (lastBackup && lastBackupEl) {
+    const d = new Date(lastBackup);
+    lastBackupEl.textContent = d.toLocaleDateString();
+    if (ageEl) {
+      const hoursAgo = (Date.now() - d.getTime()) / 3600000;
+      if (hoursAgo < 24) ageEl.textContent = Math.floor(hoursAgo) + 'h ago';
+      else ageEl.textContent = Math.floor(hoursAgo / 24) + ' days ago';
+      ageEl.style.color = hoursAgo > 168 ? 'var(--neg)' : 'var(--ink-soft)';
+    }
+  } else if (ageEl) {
+    ageEl.textContent = 'never — make one!';
+    ageEl.style.color = 'var(--neg)';
+  }
+
+  const filtered = all.slice().reverse().filter(e => {
+    const f = _auditCurrentFilter;
+    if (f === 'all') return true;
+    if (f === 'manual') return e.source === 'manual';
+    if (f === 'auto') return e.source === 'auto' || e.source === 'migration';
+    if (f === 'position') return (e.action || '').startsWith('position');
+    if (f === 'claim') return (e.action || '').includes('claim');
+    if (f === 'savings') return (e.action || '').includes('savings') || e.action === 'move-to-savings';
+    return true;
+  });
+
+  const body = document.getElementById('auditBody');
+  if (!body) return;
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--ink-soft); font-style: italic;">' +
+      (all.length === 0 ? 'Audit log пуст. Все будущие изменения будут записаны автоматически.' : 'Нет записей с этим фильтром.') +
+      '</td></tr>';
+    return;
+  }
+
+  const fmtVal = v => {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'number') return v < 1000000 ? '$' + v.toFixed(2) : v.toFixed(4);
+    if (typeof v === 'object') return JSON.stringify(v).slice(0, 30);
+    return String(v).slice(0, 40);
+  };
+
+  const srcColor = s => ({
+    manual: 'var(--accent-deep)',
+    auto: 'var(--ink-soft)',
+    migration: '#5C7CFA',
+    restore: 'var(--neg)',
+    'cloud-sync': 'var(--ink-soft)'
+  })[s] || 'var(--ink-soft)';
+
+  body.innerHTML = filtered.map(e => {
+    const d = new Date(e.ts);
+    const timeStr = d.toLocaleDateString() + ' ' + d.toTimeString().slice(0, 5);
+    return `<tr>
+      <td style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-soft);">${timeStr}</td>
+      <td><span style="display: inline-block; padding: 2px 6px; background: rgba(0,0,0,0.04); border-radius: 3px; font-size: 10px; color: ${srcColor(e.source)}; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">${e.source}</span></td>
+      <td style="font-size: 12px;"><strong>${e.action}</strong></td>
+      <td style="font-size: 12px;">${e.target || '—'}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-soft);">${fmtVal(e.before)}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">${fmtVal(e.after)}</td>
+      <td style="font-size: 11px; color: var(--ink-soft);">${e.note || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function wireAuditButtons() {
+  document.querySelectorAll('.audit-filter').forEach(btn => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', () => {
+      _auditCurrentFilter = btn.dataset.filter;
+      document.querySelectorAll('.audit-filter').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAuditLog();
+    });
+  });
+
+  const exp = document.getElementById('auditExportBtn');
+  if (exp && !exp._wired) {
+    exp._wired = true;
+    exp.addEventListener('click', () => {
+      const data = JSON.stringify(state.auditLog || [], null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'fehu-audit-' + new Date().toISOString().slice(0,10) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  const clr = document.getElementById('auditClearBtn');
+  if (clr && !clr._wired) {
+    clr._wired = true;
+    clr.addEventListener('click', () => {
+      if (!confirm('Очистить весь audit log? Сделай Export перед этим если нужна история.')) return;
+      state.auditLog = [];
+      saveState();
+      renderAuditLog();
+    });
+  }
+}
+
+// v37.16.1: BACKUP REMINDER
+function markBackupDone() {
+  localStorage.setItem('fehu_last_backup_at', new Date().toISOString());
+}
+window.markBackupDone = markBackupDone;
+
+function checkBackupReminder() {
+  if (window._backupReminderShown) return;
+  // Snooze check
+  const snoozed = localStorage.getItem('fehu_backup_snoozed_until');
+  if (snoozed && new Date(snoozed).getTime() > Date.now()) return;
+
+  const last = localStorage.getItem('fehu_last_backup_at');
+  if (!last) {
+    if (!localStorage.getItem('fehu_first_seen')) {
+      localStorage.setItem('fehu_first_seen', new Date().toISOString());
+      return;
+    }
+    const firstSeen = new Date(localStorage.getItem('fehu_first_seen')).getTime();
+    if (Date.now() - firstSeen < 3600000) return;
+    showBackupReminder('Сделай первый backup');
+    return;
+  }
+  const daysAgo = (Date.now() - new Date(last).getTime()) / 86400000;
+  if (daysAgo > 7) {
+    showBackupReminder('Backup делался ' + Math.floor(daysAgo) + ' дней назад');
+  }
+}
+window.checkBackupReminder = checkBackupReminder;
+
+function showBackupReminder(msg) {
+  if (window._backupReminderShown) return;
+  window._backupReminderShown = true;
+  const banner = document.createElement('div');
+  banner.id = 'backupReminderBanner';
+  banner.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 14px 18px; background: var(--surface); border: 2px solid var(--accent-deep); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); max-width: 320px; font-family: inherit;';
+  banner.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+      <span style="font-size: 20px;">💾</span>
+      <strong style="font-size: 13px;">Backup напоминание</strong>
+    </div>
+    <div style="font-size: 12px; color: var(--ink-soft); margin-bottom: 12px; line-height: 1.4;">
+      ${msg}. Лучше сделать сейчас — Export в JSON и сохранить на Google Drive.
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-primary" id="backupNowBtn" style="font-size: 11px; padding: 6px 10px; flex: 1;">📤 Backup now</button>
+      <button class="btn" id="backupLaterBtn" style="font-size: 11px; padding: 6px 10px;">Позже (24h)</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('backupNowBtn').addEventListener('click', () => {
+    const data = JSON.stringify(state, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fehu-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    markBackupDone();
+    if (typeof logAudit === 'function') logAudit('backup-export', { source: 'manual', note: 'Triggered from reminder' });
+    banner.remove();
+  });
+  document.getElementById('backupLaterBtn').addEventListener('click', () => {
+    banner.remove();
+    localStorage.setItem('fehu_backup_snoozed_until', new Date(Date.now() + 86400000).toISOString());
+  });
 }
 
 function renderTotalPortfolio() {
@@ -21909,8 +22245,10 @@ function renderAll() {
   guard('renderSavings', renderSavings);
   guard('renderLoans', renderLoans);
   guard('renderTotalPortfolio', renderTotalPortfolio);
+  guard('renderAuditLog', renderAuditLog);
   guard('wireSavingsButtons', wireSavingsButtons);
   guard('wireLoansButtons', wireLoansButtons);
+  guard('wireAuditButtons', wireAuditButtons);
   guard('renderTransactions', renderTransactions);
   guard('renderQuarterSelector', renderQuarterSelector);
   guard('renderQuarterlyLetter', renderQuarterlyLetter);
@@ -22603,7 +22941,18 @@ function closeModal() {
 function deletePosition(id) {
   if (!confirm('Delete this position permanently? This cannot be undone.')) return;
   const p = state.positions.find(x => x.id === id);
-  if (p) logTx('delete', p);
+  if (p) {
+    logTx('delete', p);
+    if (typeof logAudit === 'function') {
+      logAudit('position-delete', {
+        target: p.asset + ' (' + p.protocol + ')',
+        before: +p.currentValue || 0,
+        after: null,
+        source: 'manual',
+        note: 'Deleted ' + (p.status || 'active') + ' position'
+      });
+    }
+  }
   state.positions = state.positions.filter(p => p.id !== id);
   renderAll();
   saveState();
@@ -22958,6 +23307,17 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
           merged.lastClaimUpdateAt = new Date().toISOString();
         }
         state.positions[idx] = merged;
+        // v37.16.0: audit log for manual edit
+        if (typeof logAudit === 'function' && (Math.abs(prevCV - newCV) > 0.01 || Math.abs(prevClaim - newClaim) > 0.01)) {
+          logAudit('position-edit', {
+            target: merged.asset + ' (' + merged.protocol + ')',
+            before: prevCV,
+            after: newCV,
+            source: 'manual',
+            note: 'CV: $' + prevCV.toFixed(2) + ' → $' + newCV.toFixed(2) +
+                  (Math.abs(prevClaim - newClaim) > 0.01 ? ' · Claim: $' + prevClaim.toFixed(2) + ' → $' + newClaim.toFixed(2) : '')
+          });
+        }
       }
     }
     showToast('Position updated');
@@ -23001,6 +23361,16 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
     // so clear the flag to prevent closeModal() from also returning it to idle.
     pendingNewPositionContrib = null;
     logTx('open', payload);
+    // v37.16.0: audit log
+    if (typeof logAudit === 'function') {
+      logAudit('position-create', {
+        target: payload.asset + ' (' + payload.protocol + ')',
+        before: null,
+        after: +payload.deposited || 0,
+        source: 'manual',
+        note: payload.type + ' · ' + payload.network + ' · APR ' + (payload.apr || 0).toFixed(2) + '%'
+      });
+    }
     showToast('Position added');
     // v35.6: If entry date is in the past, ask about retroactive backfill
     const today = new Date().toISOString().slice(0, 10);
