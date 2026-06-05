@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.14.20</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.15.1</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -6242,6 +6242,7 @@
       <button class="nav-tab" data-scroll-to="section-performance" data-i18n="nav.performance">Performance</button>
       <button class="nav-tab" data-scroll-to="section-maturity" data-i18n="nav.maturity">Maturity</button>
       <button class="nav-tab" data-scroll-to="section-holdings"><span data-i18n="nav.holdings">Holdings</span> <span class="nav-tab-badge" id="navBadgeHoldings">0</span></button>
+      <button class="nav-tab" data-scroll-to="section-savings" style="background: linear-gradient(135deg, rgba(212,168,88,0.12), rgba(91,124,250,0.05)); border: 1px solid var(--accent-deep);"><span>🏦 Savings</span> <span class="nav-tab-badge" id="navBadgeSavings">0</span></button>
       <button class="nav-tab" data-scroll-to="section-journal" data-i18n="nav.journal">Journal</button>
       <button class="nav-tab" data-scroll-to="section-attribution" data-i18n="nav.attribution">Attribution</button>
     </div>
@@ -6326,6 +6327,35 @@
       <div class="nav-cell-label" data-i18n="kpi.bestPosition">Best Position</div>
       <div class="nav-cell-value compact" id="navBest">—</div>
       <div class="nav-cell-sub" id="navBestPct">no data yet</div>
+    </div>
+  </section>
+
+  <!-- v37.15: Total Portfolio split (DeFi fund + Savings) -->
+  <section id="totalPortfolioStrip" style="display: none; margin-top: 14px; padding: 16px 20px; background: linear-gradient(135deg, rgba(212,168,88,0.06), rgba(91,124,250,0.03)); border-radius: 8px; border: 1px solid var(--border);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="font-size: 10px; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 4px;">Total Portfolio</div>
+        <div id="totalPortfolioValue" style="font-size: 28px; font-weight: 600; font-family: 'Playfair Display', serif;">$0</div>
+        <div style="font-size: 11px; color: var(--ink-soft); margin-top: 2px;">DeFi fund + Savings vault</div>
+      </div>
+      <div style="display: flex; gap: 24px; align-items: flex-end;">
+        <div>
+          <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 4px;">⚡ DeFi (working)</div>
+          <div id="totalDefiValue" style="font-size: 18px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">$0</div>
+          <div id="totalDefiPct" style="font-size: 11px; color: var(--ink-soft);">—</div>
+        </div>
+        <div style="font-size: 24px; color: var(--ink-mute);">+</div>
+        <div>
+          <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 4px;">🏦 Savings (HODL)</div>
+          <div id="totalSavingsValue" style="font-size: 18px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">$0</div>
+          <div id="totalSavingsPct" style="font-size: 11px; color: var(--ink-soft);">—</div>
+        </div>
+      </div>
+    </div>
+    <!-- Bar split visual -->
+    <div style="margin-top: 14px; height: 8px; background: var(--surface); border-radius: 4px; overflow: hidden; display: flex;">
+      <div id="totalDefiBar" style="background: linear-gradient(135deg, var(--pos), var(--accent-deep)); height: 100%; width: 0%; transition: width 0.3s;"></div>
+      <div id="totalSavingsBar" style="background: linear-gradient(135deg, var(--accent-deep), #5C7CFA); height: 100%; width: 0%; transition: width 0.3s;"></div>
     </div>
   </section>
 
@@ -6615,6 +6645,71 @@
     </table>
   </div>
   </div><!-- /section-group holdings -->
+
+  <!-- ============ SAVINGS SECTION (v37.15) ============ -->
+  <div class="section-group section-anchor" id="section-savings" data-section="savings">
+    <div class="section-head">
+      <h2 class="section-title">Savings <em>vault</em></h2>
+      <span class="section-meta">Long-term holdings · Not yield-generating · Manual price updates</span>
+    </div>
+
+    <!-- Dashboard cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px;">
+      <div style="padding: 16px; background: var(--surface-alt); border-radius: 6px; border-left: 3px solid var(--accent-deep);">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Savings total</div>
+        <div id="savingsTotalUsd" style="font-size: 22px; font-weight: 600; font-family: 'Playfair Display', serif;">$0.00</div>
+        <div id="savingsTotalCount" style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">0 holdings</div>
+      </div>
+      <div style="padding: 16px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Cost basis</div>
+        <div id="savingsCostBasis" style="font-size: 22px; font-weight: 600; font-family: 'Playfair Display', serif;">$0.00</div>
+        <div style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">Total invested</div>
+      </div>
+      <div style="padding: 16px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Unrealized P&amp;L</div>
+        <div id="savingsPnl" style="font-size: 22px; font-weight: 600; font-family: 'Playfair Display', serif;">$0.00</div>
+        <div id="savingsPnlPct" style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">0%</div>
+      </div>
+      <div style="padding: 16px; background: var(--surface-alt); border-radius: 6px;">
+        <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px;">Last price update</div>
+        <div id="savingsLastUpdate" style="font-size: 15px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">—</div>
+        <div style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">Manual entry</div>
+      </div>
+    </div>
+
+    <!-- Action toolbar -->
+    <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+      <button class="btn btn-primary" id="savingsAddBtn">+ Add holding</button>
+      <button class="btn" id="savingsRefreshBtn" title="Update current prices for all holdings (manual)">🔄 Update prices</button>
+      <div style="flex: 1;"></div>
+      <div style="font-size: 11px; color: var(--ink-soft); padding: 8px 12px; background: rgba(91,124,250,0.05); border-radius: 4px; line-height: 1.4;">
+        💡 Savings — это монеты которые ты держишь долгосрочно. Они <strong>не</strong> участвуют в DeFi и не считаются в NAV фонда, но входят в Total Portfolio.
+      </div>
+    </div>
+
+    <!-- Holdings table -->
+    <div class="table-card">
+      <table id="savingsTable">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th class="right">Amount</th>
+            <th class="right">Avg cost</th>
+            <th class="right">Current price</th>
+            <th class="right">Cost basis</th>
+            <th class="right">Current USD</th>
+            <th class="right">P&amp;L</th>
+            <th>Location</th>
+            <th>Note</th>
+            <th class="right"></th>
+          </tr>
+        </thead>
+        <tbody id="savingsBody">
+          <tr><td colspan="10" style="text-align: center; padding: 24px; color: var(--ink-soft); font-style: italic;">No savings yet. Use <strong>+ Add holding</strong> to record your long-term BTC, ETH or other holdings.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div><!-- /section-group savings -->
 
   <!-- ============ TRANSACTIONS LOG ============ -->
   <div class="section-group section-anchor" id="section-journal" data-section="journal">
@@ -10260,6 +10355,8 @@ function renderTable() {
               buttons += `<button class="action-btn-inline" onclick="window.openPositionRevertModal('${p.id}')" title="Revert to a previous Current Value / Claimable from journal history" style="color: var(--ink-soft);">↶ Revert</button>`;
               // v37.1: Rebalance button
               buttons += `<button class="action-btn-inline" onclick="window.openRebalanceModal('${p.id}')" title="Move capital from this position to another (preserves NAV)" style="background: rgba(91,124,250,0.10); border-color: #5C7CFA; color: #4D6EE0; font-weight: 700;">⇄ Rebalance</button>`;
+              // v37.15.1: Move to Savings — для долгосрочного HODL за пределами DeFi
+              buttons += `<button class="action-btn-inline" onclick="window.openMoveToSavingsModal('${p.id}')" title="Закрыть позицию и переместить в Savings vault (сохранение coin amount + cost basis, история сохраняется)" style="background: linear-gradient(135deg, rgba(212,168,88,0.10), rgba(91,124,250,0.05)); border-color: var(--accent-deep); color: var(--accent-deep);">🏦 To Savings</button>`;
               if (lt.mode === 'rpc-uniswap-v3' || lt.mode === 'rpc-uniswap-v4') {
                 buttons += `<button class="action-btn-inline" onclick="window.manualRefreshLive('${p.id}')" title="Refresh from chain RPC">↻ Sync</button>`;
               }
@@ -20771,6 +20868,489 @@ window.openDeBankPopup = function(wallet, chain) {
 
 
 /* ---------- Full re-render ---------- */
+/* ============================================================
+   v37.15.0 — SAVINGS MODULE
+   Long-term holdings (BTC, ETH, etc.) that user keeps as savings,
+   NOT participating in DeFi yield, but counted in Total Portfolio.
+   Manual price updates. Cost basis preserved in coins.
+============================================================ */
+
+// Ensure state.savings exists
+function ensureSavingsState() {
+  if (!Array.isArray(state.savings)) state.savings = [];
+}
+
+function getSavingsTotalUsd() {
+  ensureSavingsState();
+  return state.savings.reduce((s, h) => s + (+h.currentPrice || 0) * (+h.amount || 0), 0);
+}
+function getSavingsCostBasis() {
+  ensureSavingsState();
+  return state.savings.reduce((s, h) => s + (+h.avgCost || 0) * (+h.amount || 0), 0);
+}
+
+function renderSavings() {
+  ensureSavingsState();
+  const totalUsd = getSavingsTotalUsd();
+  const costBasis = getSavingsCostBasis();
+  const pnl = totalUsd - costBasis;
+  const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+  const count = state.savings.length;
+
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setText('savingsTotalUsd', fmtUSD(totalUsd, true));
+  setText('savingsTotalCount', count + (count === 1 ? ' holding' : ' holdings'));
+  setText('savingsCostBasis', fmtUSD(costBasis, true));
+  const pnlEl = document.getElementById('savingsPnl');
+  if (pnlEl) {
+    pnlEl.textContent = (pnl >= 0 ? '+' : '') + fmtUSD(pnl, true);
+    pnlEl.style.color = pnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+  }
+  setText('savingsPnlPct', (pnl >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%');
+
+  // Last update timestamp
+  const lastUp = state.savings.reduce((latest, h) => {
+    const t = h.priceUpdatedAt ? new Date(h.priceUpdatedAt).getTime() : 0;
+    return t > latest ? t : latest;
+  }, 0);
+  setText('savingsLastUpdate', lastUp ? new Date(lastUp).toLocaleDateString() : '—');
+
+  // Nav badge
+  const badge = document.getElementById('navBadgeSavings');
+  if (badge) badge.textContent = count;
+
+  // Table body
+  const body = document.getElementById('savingsBody');
+  if (!body) return;
+  if (count === 0) {
+    body.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 24px; color: var(--ink-soft); font-style: italic;">No savings yet. Use <strong>+ Add holding</strong> to record your long-term BTC, ETH or other holdings.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.savings.map(h => {
+    const amount = +h.amount || 0;
+    const avgCost = +h.avgCost || 0;
+    const curPrice = +h.currentPrice || 0;
+    const basis = avgCost * amount;
+    const cur = curPrice * amount;
+    const itemPnl = cur - basis;
+    const itemPnlPct = basis > 0 ? (itemPnl / basis) * 100 : 0;
+    const pnlColor = itemPnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+    const decimals = (h.asset === 'BTC' || h.asset === 'cbBTC' || h.asset === 'WBTC') ? 6 : 4;
+    const stamp = h.priceUpdatedAt ? new Date(h.priceUpdatedAt).toLocaleDateString() : '—';
+
+    return `<tr>
+      <td><strong>${h.asset || '—'}</strong></td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace;">${amount.toFixed(decimals)}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace;">${avgCost > 0 ? '$' + avgCost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace;">
+        ${curPrice > 0 ? '$' + curPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}
+        <div style="font-size: 9px; color: var(--ink-mute);">${stamp}</div>
+      </td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace;">${fmtUSD(basis, true)}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">${fmtUSD(cur, true)}</td>
+      <td class="right" style="font-family: 'JetBrains Mono', monospace; color: ${pnlColor};">
+        ${(itemPnl >= 0 ? '+' : '') + fmtUSD(itemPnl, true)}
+        <div style="font-size: 10px;">${(itemPnl >= 0 ? '+' : '') + itemPnlPct.toFixed(2)}%</div>
+      </td>
+      <td style="font-size: 12px; color: var(--ink-soft);">${h.location || '—'}</td>
+      <td style="font-size: 12px; color: var(--ink-soft);">${h.note || ''}</td>
+      <td class="right">
+        <button class="btn" onclick="window.editSavings('${h.id}')" style="font-size: 11px; padding: 4px 8px;">✎</button>
+        <button class="btn" onclick="window.deleteSavings('${h.id}')" style="font-size: 11px; padding: 4px 8px; color: var(--neg);">×</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.openSavingsModal = function(existingId) {
+  ensureSavingsState();
+  const existing = existingId ? state.savings.find(h => h.id === existingId) : null;
+  const isEdit = !!existing;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop open';
+  modal.id = 'savingsModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 560px;">
+      <div class="modal-header">
+        <h2>${isEdit ? '✎ Edit savings holding' : '+ Add savings holding'}</h2>
+        <button class="btn" onclick="document.getElementById('savingsModal').remove()">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="padding: 12px; background: rgba(91,124,250,0.05); border-radius: 4px; margin-bottom: 18px; font-size: 12px; line-height: 1.5; color: var(--ink-soft);">
+          💡 Это <strong>сбережения</strong> — монеты которые ты держишь долгосрочно. Они не дают yield и не учитываются в NAV фонда. Но входят в общий портфель и в P&amp;L по цене.
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Asset *</label>
+            <input type="text" id="sav_asset" placeholder="BTC, ETH, cbBTC, USDC..." value="${existing?.asset || ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Amount (coins) *</label>
+            <input type="number" id="sav_amount" step="0.00000001" placeholder="0.0341" value="${existing?.amount ?? ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Avg cost (USD/coin) *</label>
+            <input type="number" id="sav_avgCost" step="0.01" placeholder="67000" value="${existing?.avgCost ?? ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+            <div style="font-size: 10px; color: var(--ink-mute); margin-top: 3px;">Средняя цена когда покупал / получил</div>
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Current price (USD/coin)</label>
+            <input type="number" id="sav_curPrice" step="0.01" placeholder="63800" value="${existing?.currentPrice ?? ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+            <div style="font-size: 10px; color: var(--ink-mute); margin-top: 3px;">Текущая (для расчёта P&amp;L)</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Location</label>
+            <input type="text" id="sav_location" placeholder="Aave Base, Cold wallet, Coinbase..." value="${existing?.location || ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Note</label>
+            <input type="text" id="sav_note" placeholder="Long-term HODL" value="${existing?.note || ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+          </div>
+        </div>
+
+        <div id="savPreview" style="padding: 12px; background: var(--surface-alt); border-radius: 4px; margin-top: 14px; font-size: 12px; color: var(--ink-soft);"></div>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button class="btn" onclick="document.getElementById('savingsModal').remove()">Cancel</button>
+          <button class="btn btn-primary" id="savingsSaveBtn">${isEdit ? '💾 Save' : '+ Add'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const updPreview = () => {
+    const a = parseFloat(document.getElementById('sav_amount').value) || 0;
+    const c = parseFloat(document.getElementById('sav_avgCost').value) || 0;
+    const cur = parseFloat(document.getElementById('sav_curPrice').value) || 0;
+    const basis = a * c;
+    const value = a * cur;
+    const pnl = value - basis;
+    const pnlPct = basis > 0 ? (pnl/basis)*100 : 0;
+    const sym = document.getElementById('sav_asset').value || '—';
+    document.getElementById('savPreview').innerHTML =
+      `Cost basis: <strong>${fmtUSD(basis, true)}</strong> · ` +
+      `Current value: <strong>${fmtUSD(value, true)}</strong> · ` +
+      `P&L: <strong style="color: ${pnl >= 0 ? 'var(--pos)' : 'var(--neg)'};">${pnl >= 0 ? '+' : ''}${fmtUSD(pnl, true)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</strong>`;
+  };
+  ['sav_amount','sav_avgCost','sav_curPrice','sav_asset'].forEach(id =>
+    document.getElementById(id).addEventListener('input', updPreview)
+  );
+  updPreview();
+
+  document.getElementById('savingsSaveBtn').addEventListener('click', () => {
+    const asset = (document.getElementById('sav_asset').value || '').trim().toUpperCase();
+    const amount = parseFloat(document.getElementById('sav_amount').value) || 0;
+    const avgCost = parseFloat(document.getElementById('sav_avgCost').value) || 0;
+    const curPrice = parseFloat(document.getElementById('sav_curPrice').value) || 0;
+    const location = (document.getElementById('sav_location').value || '').trim();
+    const note = (document.getElementById('sav_note').value || '').trim();
+
+    if (!asset) { alert('Введи актив (BTC, ETH...)'); return; }
+    if (amount <= 0) { alert('Введи количество монет'); return; }
+    if (avgCost <= 0) { alert('Введи среднюю цену входа'); return; }
+
+    ensureSavingsState();
+    const now = new Date().toISOString();
+    if (isEdit) {
+      Object.assign(existing, {
+        asset, amount, avgCost,
+        currentPrice: curPrice > 0 ? curPrice : existing.currentPrice,
+        priceUpdatedAt: curPrice > 0 ? now : existing.priceUpdatedAt,
+        location, note,
+        updatedAt: now
+      });
+    } else {
+      state.savings.push({
+        id: 'sav_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        asset, amount, avgCost,
+        currentPrice: curPrice > 0 ? curPrice : avgCost,
+        priceUpdatedAt: curPrice > 0 ? now : null,
+        location, note,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    document.getElementById('savingsModal').remove();
+    saveState();
+    renderAll();
+  });
+};
+
+window.editSavings = function(id) { window.openSavingsModal(id); };
+
+window.deleteSavings = function(id) {
+  ensureSavingsState();
+  const h = state.savings.find(x => x.id === id);
+  if (!h) return;
+  if (!confirm(`Удалить ${h.asset} (${h.amount}) из Savings? Это не вернёт деньги — только убирает запись из трекера.`)) return;
+  state.savings = state.savings.filter(x => x.id !== id);
+  saveState();
+  renderAll();
+};
+
+window.refreshSavingsPrices = function() {
+  ensureSavingsState();
+  if (!state.savings.length) { alert('Нет сберегательных активов для обновления.'); return; }
+  // Open a quick prompt modal with current prices, manual edit
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop open';
+  modal.id = 'savRefreshModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 480px;">
+      <div class="modal-header">
+        <h2>🔄 Update savings prices</h2>
+        <button class="btn" onclick="document.getElementById('savRefreshModal').remove()">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--ink-soft); margin-bottom: 14px;">
+          Введи актуальные цены вручную. Они применятся к каждой записи этого актива.
+        </div>
+        <div id="savRefreshList" style="display: flex; flex-direction: column; gap: 10px;">
+          ${(() => {
+            const byAsset = {};
+            state.savings.forEach(h => {
+              if (!byAsset[h.asset]) byAsset[h.asset] = { asset: h.asset, currentPrice: h.currentPrice || 0, count: 0 };
+              byAsset[h.asset].count++;
+            });
+            return Object.values(byAsset).map(a => `
+              <div style="display: grid; grid-template-columns: 80px 1fr 60px; gap: 10px; align-items: center;">
+                <div style="font-weight: 600;">${a.asset}</div>
+                <input type="number" step="0.01" data-asset="${a.asset}" value="${a.currentPrice}" class="sav-price-input" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+                <div style="font-size: 11px; color: var(--ink-mute);">${a.count}×</div>
+              </div>
+            `).join('');
+          })()}
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button class="btn" onclick="document.getElementById('savRefreshModal').remove()">Cancel</button>
+          <button class="btn btn-primary" id="savApplyPricesBtn">💾 Apply</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('savApplyPricesBtn').addEventListener('click', () => {
+    const now = new Date().toISOString();
+    document.querySelectorAll('.sav-price-input').forEach(inp => {
+      const asset = inp.dataset.asset;
+      const price = parseFloat(inp.value) || 0;
+      if (price > 0) {
+        state.savings.filter(h => h.asset === asset).forEach(h => {
+          h.currentPrice = price;
+          h.priceUpdatedAt = now;
+        });
+      }
+    });
+    document.getElementById('savRefreshModal').remove();
+    saveState();
+    renderAll();
+  });
+};
+
+function wireSavingsButtons() {
+  const addBtn = document.getElementById('savingsAddBtn');
+  if (addBtn && !addBtn._wired) {
+    addBtn._wired = true;
+    addBtn.addEventListener('click', () => window.openSavingsModal());
+  }
+  const refreshBtn = document.getElementById('savingsRefreshBtn');
+  if (refreshBtn && !refreshBtn._wired) {
+    refreshBtn._wired = true;
+    refreshBtn.addEventListener('click', () => window.refreshSavingsPrices());
+  }
+}
+
+// v37.15.1: Move position from DeFi (Holdings) to Savings vault
+window.openMoveToSavingsModal = function(positionId) {
+  const p = state.positions.find(x => x.id === positionId);
+  if (!p) { alert('Позиция не найдена'); return; }
+  if (p.status !== 'active') { alert('Можно перемещать только активные позиции'); return; }
+
+  const currentValue = +p.currentValue || 0;
+  const claimable = +p.claimable || 0;
+  const deposited = +p.deposited || 0;
+  // Guess asset symbol from position
+  const guessAsset = (p.asset || '').split('/')[0].trim() || p.underlying || 'BTC';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop open';
+  modal.id = 'moveSavingsModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 560px;">
+      <div class="modal-header">
+        <h2>🏦 Move to Savings vault</h2>
+        <button class="btn" onclick="document.getElementById('moveSavingsModal').remove()">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="padding: 12px; background: rgba(212,168,88,0.06); border-left: 3px solid var(--accent-deep); border-radius: 4px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
+          Закрывает позицию <strong>${p.asset}</strong> на ${p.protocol} (status → <code>moved-to-savings</code>) и создаёт запись в Savings. История сохраняется. Дубля не будет.
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Asset symbol *</label>
+            <input type="text" id="mv_asset" value="${guessAsset}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Amount (coins) *</label>
+            <input type="number" id="mv_amount" step="0.00000001" placeholder="0.0341" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Avg cost (USD/coin) *</label>
+            <input type="number" id="mv_avgCost" step="0.01" placeholder="66000" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+            <div style="font-size: 10px; color: var(--ink-mute); margin-top: 3px;">Cost basis на момент входа (не текущая)</div>
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Current price (USD/coin)</label>
+            <input type="number" id="mv_curPrice" step="0.01" placeholder="63800" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: 'JetBrains Mono', monospace;">
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <label style="font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 4px;">Location</label>
+          <input type="text" id="mv_location" value="${(p.protocol + ' ' + (p.network || '')).trim()}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-family: inherit;">
+        </div>
+
+        <div id="mvPreview" style="padding: 12px; background: var(--surface-alt); border-radius: 4px; margin-top: 14px; font-size: 12px;"></div>
+
+        <div style="margin-top: 14px; padding: 10px; background: rgba(91,124,250,0.05); border-radius: 4px; font-size: 11px; color: var(--ink-soft); line-height: 1.5;">
+          <strong>Что произойдёт:</strong><br>
+          • Позиция <code>${p.asset}</code> уйдёт в архив со статусом <code>moved-to-savings</code><br>
+          • В Savings появится запись с указанным amount &amp; cost basis<br>
+          • Текущее CV $${currentValue.toFixed(2)} ${claimable > 0 ? '+ claimable $' + claimable.toFixed(2) : ''} = baseline для проверки<br>
+          • NAV фонда уменьшится на ${fmtUSD(currentValue + claimable, true)}, Total Portfolio останется тем же
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button class="btn" onclick="document.getElementById('moveSavingsModal').remove()">Cancel</button>
+          <button class="btn btn-primary" id="mvConfirmBtn">🏦 Move</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const upd = () => {
+    const a = parseFloat(document.getElementById('mv_amount').value) || 0;
+    const c = parseFloat(document.getElementById('mv_avgCost').value) || 0;
+    const cur = parseFloat(document.getElementById('mv_curPrice').value) || 0;
+    const basis = a * c;
+    const value = a * cur;
+    const diff = value - currentValue;
+    document.getElementById('mvPreview').innerHTML =
+      `Cost basis: <strong>${fmtUSD(basis, true)}</strong> · ` +
+      `Current value: <strong>${fmtUSD(value, true)}</strong> · ` +
+      `Position CV was: <strong>${fmtUSD(currentValue, true)}</strong>` +
+      (Math.abs(diff) > 1 ? `<br><span style="color: var(--neg);">⚠ Разница ${fmtUSD(diff, true)} с позицией CV — проверь amount/price</span>` : '');
+  };
+  ['mv_amount','mv_avgCost','mv_curPrice'].forEach(id =>
+    document.getElementById(id).addEventListener('input', upd)
+  );
+
+  document.getElementById('mvConfirmBtn').addEventListener('click', () => {
+    const asset = (document.getElementById('mv_asset').value || '').trim().toUpperCase();
+    const amount = parseFloat(document.getElementById('mv_amount').value) || 0;
+    const avgCost = parseFloat(document.getElementById('mv_avgCost').value) || 0;
+    const curPrice = parseFloat(document.getElementById('mv_curPrice').value) || avgCost;
+    const location = (document.getElementById('mv_location').value || '').trim();
+
+    if (!asset) { alert('Введи актив'); return; }
+    if (amount <= 0) { alert('Введи количество монет'); return; }
+    if (avgCost <= 0) { alert('Введи cost basis'); return; }
+
+    ensureSavingsState();
+    const now = new Date().toISOString();
+
+    // 1. Создать Savings запись
+    state.savings.push({
+      id: 'sav_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      asset, amount, avgCost,
+      currentPrice: curPrice,
+      priceUpdatedAt: now,
+      location,
+      note: `Moved from ${p.protocol} · ${p.asset}`,
+      sourcePositionId: p.id,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    // 2. Закрыть позицию
+    p.status = 'moved-to-savings';
+    p.closedAt = now;
+    p.closeReason = 'moved-to-savings';
+    p.updatedAt = now;
+
+    // 3. Journal entry
+    if (!Array.isArray(state.transactions)) state.transactions = [];
+    state.transactions.push({
+      id: 'tx_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      type: 'move-to-savings',
+      action: 'move',
+      positionId: p.id,
+      protocol: p.protocol,
+      amount: amount * avgCost,
+      asset,
+      date: now.slice(0, 10),
+      timestamp: now,
+      note: `Moved to Savings: ${amount} ${asset} @ avg $${avgCost.toFixed(2)} · cost basis ${fmtUSD(amount * avgCost, true)}`
+    });
+
+    document.getElementById('moveSavingsModal').remove();
+    saveState();
+    renderAll();
+    alert('Готово! Позиция в архиве, актив в Savings.');
+  });
+};
+function renderTotalPortfolio() {
+  ensureSavingsState();
+  const strip = document.getElementById('totalPortfolioStrip');
+  if (!strip) return;
+  const savingsUsd = getSavingsTotalUsd();
+  // Hide strip if no savings — keep Overview clean
+  if (savingsUsd <= 0) {
+    strip.style.display = 'none';
+    return;
+  }
+  strip.style.display = 'block';
+
+  const defiNav = (typeof getTotalValue === 'function') ? getTotalValue() : 0;
+  const total = defiNav + savingsUsd;
+  const defiPct = total > 0 ? (defiNav / total) * 100 : 0;
+  const savPct = total > 0 ? (savingsUsd / total) * 100 : 0;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('totalPortfolioValue', fmtUSD(total, true));
+  set('totalDefiValue', fmtUSD(defiNav, true));
+  set('totalSavingsValue', fmtUSD(savingsUsd, true));
+  set('totalDefiPct', defiPct.toFixed(1) + '% of total');
+  set('totalSavingsPct', savPct.toFixed(1) + '% of total');
+  const dbar = document.getElementById('totalDefiBar');
+  const sbar = document.getElementById('totalSavingsBar');
+  if (dbar) dbar.style.width = defiPct + '%';
+  if (sbar) sbar.style.width = savPct + '%';
+}
+
+/* ============================================================
+   END SAVINGS MODULE
+============================================================ */
+
 function renderAll() {
   // v37.11: Every render call is individually guarded. Previously the first
   // ~17 renders (renderTable, renderDistributions/Capital flows, etc.) ran
@@ -20795,6 +21375,9 @@ function renderAll() {
   guard('renderDrawdownAndRisk', renderDrawdownAndRisk);
   guard('renderFilters', renderFilters);
   guard('renderTable', renderTable);
+  guard('renderSavings', renderSavings);
+  guard('renderTotalPortfolio', renderTotalPortfolio);
+  guard('wireSavingsButtons', wireSavingsButtons);
   guard('renderTransactions', renderTransactions);
   guard('renderQuarterSelector', renderQuarterSelector);
   guard('renderQuarterlyLetter', renderQuarterlyLetter);
