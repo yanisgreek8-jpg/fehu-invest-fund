@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.16.8</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.9</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -19943,7 +19943,10 @@ function renderRewardsHistory() {
         <td class="right pos" style="color: var(--pos); font-weight: 700;">+${fmtUSD(+tx.amount || 0, true)}</td>
         <td class="right">${tx.token ? escapeHTML(tx.token) + (tx.units ? ' (' + tx.units + ')' : '') : '—'}</td>
         <td>${txLink ? `<a class="rewards-tx-link" href="${txLink}" target="_blank" rel="noopener" title="${escapeHTML(tx.txHash)}">${escapeHTML(txShort)}</a>` : '—'}</td>
-        <td><button class="btn" style="font-size: 10px; padding: 3px 8px;" onclick="window.deleteClaimEvent('${tx.id}')" title="Delete">×</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn" style="font-size: 10px; padding: 3px 8px;" onclick="window.editClaimEvent('${tx.id}')" title="Edit claim">✎</button>
+          <button class="btn" style="font-size: 10px; padding: 3px 8px; color: var(--neg);" onclick="window.deleteClaimEvent('${tx.id}')" title="Delete">×</button>
+        </td>
       </tr>
     `;
   }).join('');
@@ -20496,7 +20499,53 @@ function exportClaimsCsv() {
 // conflict with the position-level claim modal. This one logs a standalone
 // reward record into the Rewards Ledger, not a per-position claim with
 // route selection.)
+// v37.16.9: editing state for claim modal
+let _editingClaimId = null;
+
+window.editClaimEvent = function(id) {
+  const tx = (state.claimEvents || []).find(x => x.id === id);
+  if (!tx) { alert('Claim не найден'); return; }
+  _editingClaimId = id;
+  const modal = document.getElementById('claimLedgerModal');
+  if (!modal) return;
+  // Populate dropdown with positions (include the one used in this tx even if inactive)
+  const select = document.getElementById('claim_position');
+  if (select) {
+    const positions = state.positions || [];
+    select.innerHTML = '<option value="">— Standalone (no position) —</option>' +
+      positions.map(p => {
+        const label = (p.asset || 'Position') + ' (' + (p.protocol || '—') + (p.status !== 'active' ? ' · ' + p.status : '') + ')';
+        return `<option value="${p.id}">${escapeHTML(label)}</option>`;
+      }).join('');
+    select.value = tx.position || '';
+  }
+  document.getElementById('claim_date').value = (tx.date || '').slice(0, 10);
+  document.getElementById('claim_amount').value = tx.amount != null ? tx.amount : '';
+  document.getElementById('claim_units').value = tx.units != null ? tx.units : '';
+  document.getElementById('claim_token').value = tx.token || 'USDC';
+  document.getElementById('claim_txhash').value = tx.txHash || '';
+  document.getElementById('claim_note').value = tx.note || '';
+  document.getElementById('claim_addToIdle').checked = false; // never re-add to idle on edit
+  const typeSel = document.getElementById('claim_type');
+  if (typeSel && tx.rewardType) typeSel.value = tx.rewardType;
+
+  // Change save button label to indicate edit mode
+  const saveBtn = document.getElementById('claimModalSave');
+  if (saveBtn) saveBtn.innerHTML = '💾 Update claim';
+  // Add a visual hint to title
+  const title = document.querySelector('#claimLedgerModal .claim-modal-title');
+  if (title) title.innerHTML = 'Edit <em>claim</em>';
+
+  modal.classList.add('open');
+};
+
 function openClaimLedgerModal(presetPositionId = null) {
+  _editingClaimId = null;
+  // Restore default save button label and title
+  const saveBtn = document.getElementById('claimModalSave');
+  if (saveBtn) saveBtn.innerHTML = '💾 Save claim';
+  const title = document.querySelector('#claimLedgerModal .claim-modal-title');
+  if (title) title.innerHTML = 'Log <em>claim</em> event';
   const modal = document.getElementById('claimLedgerModal');
   if (!modal) return;
   // Populate position dropdown
@@ -20531,6 +20580,11 @@ function openClaimLedgerModal(presetPositionId = null) {
 window.openClaimLedgerModal = openClaimLedgerModal;
 
 function closeClaimModal() {
+  _editingClaimId = null;
+  const saveBtn = document.getElementById('claimModalSave');
+  if (saveBtn) saveBtn.innerHTML = '💾 Save claim';
+  const title = document.querySelector('#claimLedgerModal .claim-modal-title');
+  if (title) title.innerHTML = 'Log <em>claim</em> event';
   document.getElementById('claimLedgerModal')?.classList.remove('open');
 }
 
@@ -20875,6 +20929,44 @@ function setupRewardsLedger() {
         data.protocol = pos?.protocol || null;
         data.positionName = pos ? (pos.asset || pos.type) : null;
       }
+
+      // v37.16.9: edit mode — update existing claim instead of creating new
+      if (_editingClaimId) {
+        const idx = (state.claimEvents || []).findIndex(x => x.id === _editingClaimId);
+        if (idx >= 0) {
+          const before = { ...state.claimEvents[idx] };
+          const updated = {
+            ...before,
+            date: data.date,
+            position: data.position,
+            rewardType: data.rewardType,
+            token: data.token,
+            amount: data.amount,
+            units: data.units,
+            txHash: data.txHash,
+            note: data.note,
+            protocol: data.protocol || before.protocol,
+            positionName: data.positionName || before.positionName,
+            updatedAt: new Date().toISOString()
+          };
+          state.claimEvents[idx] = updated;
+          if (typeof logAudit === 'function') {
+            logAudit('claim-edit', {
+              target: (updated.positionName || 'Standalone') + ' · ' + updated.token,
+              before: +before.amount || 0,
+              after: +updated.amount || 0,
+              source: 'manual',
+              note: 'Date: ' + before.date + '→' + updated.date
+            });
+          }
+          saveState();
+          renderAll();
+          closeClaimModal();
+          alert('✅ Claim обновлён: $' + updated.amount.toFixed(2));
+          return;
+        }
+      }
+
       console.log('[Claim save] calling logClaimEvent...');
       logClaimEvent(data);
       console.log('[Claim save] OK saved');
