@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.16.5</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.6</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -20834,28 +20834,51 @@ function setupRewardsLedger() {
   document.getElementById('claimModalClose')?.addEventListener('click', closeClaimModal);
   document.getElementById('claimModalCancel')?.addEventListener('click', closeClaimModal);
   document.getElementById('claimModalSave')?.addEventListener('click', () => {
-    const data = {
-      date: document.getElementById('claim_date').value,
-      position: document.getElementById('claim_position').value || null,
-      rewardType: document.getElementById('claim_type').value,
-      token: document.getElementById('claim_token').value,
-      amount: parseFloat(document.getElementById('claim_amount').value) || 0,
-      units: parseFloat(document.getElementById('claim_units').value) || null,
-      txHash: document.getElementById('claim_txhash').value.trim() || null,
-      note: document.getElementById('claim_note').value.trim() || null,
-      addToIdle: document.getElementById('claim_addToIdle').checked
-    };
-    if (!data.amount || data.amount <= 0) {
-      alert('Enter a valid USD amount');
-      return;
+    try {
+      // v37.16.6: normalize date if user-locale format (dd.mm.yyyy → yyyy-mm-dd)
+      let dateVal = document.getElementById('claim_date').value;
+      const dm = dateVal && dateVal.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (dm) dateVal = dm[3] + '-' + dm[2] + '-' + dm[1];
+
+      const data = {
+        date: dateVal,
+        position: document.getElementById('claim_position').value || null,
+        rewardType: document.getElementById('claim_type').value,
+        token: document.getElementById('claim_token').value,
+        amount: parseLocaleNumber(document.getElementById('claim_amount').value),
+        units: parseLocaleNumber(document.getElementById('claim_units').value) || null,
+        txHash: document.getElementById('claim_txhash').value.trim() || null,
+        note: document.getElementById('claim_note').value.trim() || null,
+        addToIdle: document.getElementById('claim_addToIdle').checked
+      };
+      if (!data.amount || data.amount <= 0) {
+        alert('Введи сумму в USD (например 96.20 или 96,20)');
+        return;
+      }
+      if (!data.date) {
+        alert('Введи дату');
+        return;
+      }
+      if (data.position) {
+        const pos = getPositionById(data.position);
+        data.protocol = pos?.protocol || null;
+        data.positionName = pos ? (pos.asset || pos.type) : null;
+      }
+      logClaimEvent(data);
+      if (typeof logAudit === 'function') {
+        logAudit('claim-logged', {
+          target: (data.positionName || 'Standalone') + ' · ' + data.token,
+          before: null,
+          after: data.amount,
+          source: 'manual',
+          note: data.rewardType + (data.units ? ' · ' + data.units + ' ' + data.token : '')
+        });
+      }
+      closeClaimModal();
+    } catch (err) {
+      console.error('[Claim save] Error:', err);
+      alert('Ошибка при сохранении: ' + (err.message || err) + '\n\nПроверь консоль (F12) для деталей.');
     }
-    if (data.position) {
-      const pos = getPositionById(data.position);
-      data.protocol = pos?.protocol || null;
-      data.positionName = pos ? (pos.asset || pos.type) : null;
-    }
-    logClaimEvent(data);
-    closeClaimModal();
   });
 
   // Close modal on Escape
