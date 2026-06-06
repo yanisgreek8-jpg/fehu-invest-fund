@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.16.4</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.5</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -9466,6 +9466,18 @@ function saveState() {
 
 // v37.16.0: AUDIT LOG — пишет все важные изменения для прозрачности.
 // Помогает отследить когда что менялось и откатить если что.
+// v37.16.5: Locale-aware number parser. Accepts both "66652.14" and "66652,14"
+// (Russian/European locale uses comma as decimal separator).
+function parseLocaleNumber(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  // Replace comma with dot, also strip thousand separators (spaces, NBSP)
+  const s = String(v).trim().replace(/[\s\u00A0]/g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+window.parseLocaleNumber = parseLocaleNumber;
+
 function logAudit(action, opts) {
   if (!state.auditLog) state.auditLog = [];
   opts = opts || {};
@@ -21287,9 +21299,9 @@ window.openSavingsModal = function(existingId) {
   document.body.appendChild(modal);
 
   const updPreview = () => {
-    const a = parseFloat(document.getElementById('sav_amount').value) || 0;
-    const c = parseFloat(document.getElementById('sav_avgCost').value) || 0;
-    const cur = parseFloat(document.getElementById('sav_curPrice').value) || 0;
+    const a = parseLocaleNumber(document.getElementById('sav_amount').value) || 0;
+    const c = parseLocaleNumber(document.getElementById('sav_avgCost').value) || 0;
+    const cur = parseLocaleNumber(document.getElementById('sav_curPrice').value) || 0;
     const basis = a * c;
     const value = a * cur;
     const pnl = value - basis;
@@ -21307,9 +21319,9 @@ window.openSavingsModal = function(existingId) {
 
   document.getElementById('savingsSaveBtn').addEventListener('click', () => {
     const asset = (document.getElementById('sav_asset').value || '').trim().toUpperCase();
-    const amount = parseFloat(document.getElementById('sav_amount').value) || 0;
-    const avgCost = parseFloat(document.getElementById('sav_avgCost').value) || 0;
-    const curPrice = parseFloat(document.getElementById('sav_curPrice').value) || 0;
+    const amount = parseLocaleNumber(document.getElementById('sav_amount').value) || 0;
+    const avgCost = parseLocaleNumber(document.getElementById('sav_avgCost').value) || 0;
+    const curPrice = parseLocaleNumber(document.getElementById('sav_curPrice').value) || 0;
     const location = (document.getElementById('sav_location').value || '').trim();
     const note = (document.getElementById('sav_note').value || '').trim();
 
@@ -21467,7 +21479,7 @@ window.openDeployFromSavingsModal = function(id) {
     const assetName = (document.getElementById('dep_asset').value || '').trim();
     const type = document.getElementById('dep_type').value;
     const network = (document.getElementById('dep_network').value || '').trim();
-    const apr = parseFloat(document.getElementById('dep_apr').value) || 0;
+    const apr = parseLocaleNumber(document.getElementById('dep_apr').value) || 0;
     const mode = document.getElementById('dep_basis').value;
 
     if (!protocol) { alert('Введи протокол'); return; }
@@ -21586,7 +21598,7 @@ window.refreshSavingsPrices = function() {
     const now = new Date().toISOString();
     document.querySelectorAll('.sav-price-input').forEach(inp => {
       const asset = inp.dataset.asset;
-      const price = parseFloat(inp.value) || 0;
+      const price = parseLocaleNumber(inp.value) || 0;
       if (price > 0) {
         state.savings.filter(h => h.asset === asset).forEach(h => {
           h.currentPrice = price;
@@ -21686,9 +21698,9 @@ window.openMoveToSavingsModal = function(positionId) {
   document.body.appendChild(modal);
 
   const upd = () => {
-    const a = parseFloat(document.getElementById('mv_amount').value) || 0;
-    const c = parseFloat(document.getElementById('mv_avgCost').value) || 0;
-    const cur = parseFloat(document.getElementById('mv_curPrice').value) || 0;
+    const a = parseLocaleNumber(document.getElementById('mv_amount').value) || 0;
+    const c = parseLocaleNumber(document.getElementById('mv_avgCost').value) || 0;
+    const cur = parseLocaleNumber(document.getElementById('mv_curPrice').value) || 0;
     const basis = a * c;
     const value = a * cur;
     const diff = value - currentValue;
@@ -21704,9 +21716,9 @@ window.openMoveToSavingsModal = function(positionId) {
 
   document.getElementById('mvConfirmBtn').addEventListener('click', () => {
     const asset = (document.getElementById('mv_asset').value || '').trim().toUpperCase();
-    const amount = parseFloat(document.getElementById('mv_amount').value) || 0;
-    const avgCost = parseFloat(document.getElementById('mv_avgCost').value) || 0;
-    const curPrice = parseFloat(document.getElementById('mv_curPrice').value) || avgCost;
+    const amount = parseLocaleNumber(document.getElementById('mv_amount').value) || 0;
+    const avgCost = parseLocaleNumber(document.getElementById('mv_avgCost').value) || 0;
+    const curPrice = parseLocaleNumber(document.getElementById('mv_curPrice').value) || avgCost;
     const location = (document.getElementById('mv_location').value || '').trim();
 
     if (!asset) { alert('Введи актив'); return; }
@@ -21920,8 +21932,8 @@ window.openLoanModal = function(existingId) {
   document.body.appendChild(modal);
 
   const upd = () => {
-    const usd = parseFloat(document.getElementById('loan_usd').value) || 0;
-    const rate = parseFloat(document.getElementById('loan_rate').value) || 0;
+    const usd = parseLocaleNumber(document.getElementById('loan_usd').value) || 0;
+    const rate = parseLocaleNumber(document.getElementById('loan_rate').value) || 0;
     const annual = usd * rate / 100;
     document.getElementById('loanPreview').innerHTML =
       `Annual interest cost: <strong style="color: var(--neg);">−${fmtUSD(annual, true).replace('-', '')}</strong> · ` +
@@ -21932,9 +21944,9 @@ window.openLoanModal = function(existingId) {
 
   document.getElementById('loanSaveBtn').addEventListener('click', () => {
     const asset = (document.getElementById('loan_asset').value || '').trim().toUpperCase();
-    const amount = parseFloat(document.getElementById('loan_amount').value) || 0;
-    const usd = parseFloat(document.getElementById('loan_usd').value) || 0;
-    const rate = parseFloat(document.getElementById('loan_rate').value) || 0;
+    const amount = parseLocaleNumber(document.getElementById('loan_amount').value) || 0;
+    const usd = parseLocaleNumber(document.getElementById('loan_usd').value) || 0;
+    const rate = parseLocaleNumber(document.getElementById('loan_rate').value) || 0;
     const protocol = (document.getElementById('loan_protocol').value || '').trim();
     const startDate = document.getElementById('loan_start').value;
     const collateralSavingsId = document.getElementById('loan_collateral').value;
@@ -25821,8 +25833,8 @@ window.openRollToSpotModal = function(positionId) {
     const priceEl = document.getElementById('rollEffPrice');
     const selEl = document.getElementById('rollManualAsset');
     const updatePrice = () => {
-      const u = parseFloat(usdEl.value) || 0;
-      const a = parseFloat(amtEl.value) || 0;
+      const u = parseLocaleNumber(usdEl.value) || 0;
+      const a = parseLocaleNumber(amtEl.value) || 0;
       const sym = selEl.value || '?';
       if (a > 0 && u > 0) {
         const price = u / a;
