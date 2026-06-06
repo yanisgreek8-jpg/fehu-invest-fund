@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.16.11</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.16.13</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -7908,13 +7908,13 @@
         <div class="field form-full" id="tokenAmountField" style="background: linear-gradient(135deg, rgba(212,168,88,0.04), transparent); border: 1px dashed rgba(212,168,88,0.3); padding: 12px; border-radius: 4px;">
           <label>💱 Token amount <span style="color: var(--ink-mute); font-weight: 400;">(optional — auto-fills USD below)</span></label>
           <div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px;">
-            <input type="number" id="f_tokenAmount" step="0.000001" min="0" placeholder="e.g. 0.0003135" style="flex: 2;">
+            <input type="text" inputmode="decimal" id="f_tokenAmount" placeholder="e.g. 0.0003135 или 0,0003135" style="flex: 2;">
             <input type="text" id="f_tokenSymbol" placeholder="cbBTC" style="flex: 1; text-transform: uppercase;" maxlength="10">
             <button type="button" id="f_fetchPriceBtn" class="btn" onclick="window.fehuFetchPriceForForm && window.fehuFetchPriceForForm()" style="white-space: nowrap; border-color: var(--accent-deep); color: var(--accent-deep);">💵 Auto price</button>
           </div>
           <!-- v34.3: Manual price input -->
           <div style="display: flex; gap: 8px; align-items: stretch;">
-            <input type="number" id="f_manualPrice" step="0.000001" min="0" placeholder="Or enter price manually (e.g. 76800)" style="flex: 2;">
+            <input type="text" inputmode="decimal" id="f_manualPrice" placeholder="Or enter price manually (e.g. 76800)" style="flex: 2;">
             <span style="display: flex; align-items: center; color: var(--ink-mute); font-size: 11px; padding: 0 4px;">USD per token</span>
             <button type="button" id="f_manualPriceBtn" class="btn" onclick="window.fehuApplyManualPrice && window.fehuApplyManualPrice()" style="white-space: nowrap;">✓ Apply</button>
           </div>
@@ -16144,7 +16144,7 @@ window.fehuFetchPriceForForm = async function() {
 
   if (!amountEl || !symbolEl) return;
 
-  const amount = parseFloat(amountEl.value);
+  const amount = parseLocaleNumber(amountEl.value);
   let symbol = (symbolEl.value || '').trim().toUpperCase();
 
   // Auto-detect symbol from Asset name if symbol is empty
@@ -20426,33 +20426,44 @@ function logClaimEvent(data) {
     amount: +data.amount || 0,
     txHash: data.txHash || null,
     note: data.note || null,
-    addedToIdle: !!data.addToIdle
+    addedToIdle: true // v37.16.12: ВСЕГДА идёт в treasury
   };
   state.transactions.push(claim);
 
-  // Optionally add to idle treasury
-  if (data.addToIdle && +data.amount > 0) {
+  // v37.16.12: ВСЕГДА добавляем в idle treasury — claim это доход фонда,
+  // он должен расти в treasury пока пользователь не задеплоит в новую позицию.
+  if (+data.amount > 0) {
     if (!state.idleTreasury) state.idleTreasury = [];
     const symbol = data.token || 'USDC';
     const existing = state.idleTreasury.find(i => (i.symbol || i.asset) === symbol);
     if (existing) {
       existing.usd = (+existing.usd || 0) + (+data.amount);
-      if (data.units && existing.units) existing.units = (+existing.units || 0) + (+data.units);
+      if (data.units && existing.units != null) {
+        existing.units = (+existing.units || 0) + (+data.units);
+      } else if (data.units) {
+        existing.units = +data.units;
+      }
+      // Update note to reflect accumulation
+      const sourceLabel = (data.positionName || data.protocol || 'claim');
+      existing.note = (existing.note || '') + ' · +' + (+data.amount).toFixed(2) + ' from ' + sourceLabel;
+      if (existing.note.length > 200) existing.note = existing.note.slice(-200);
     } else {
+      const sourceLabel = (data.positionName || data.protocol || 'claim');
       state.idleTreasury.push({
         id: 'idle-' + Date.now(),
         symbol: symbol,
         asset: symbol,
         usd: +data.amount,
         units: +data.units || null,
-        note: 'Auto-added from claim event ' + (data.note || '')
+        source: 'claim-reward',
+        note: 'From claim · ' + sourceLabel + (data.note ? ' · ' + data.note : '')
       });
     }
   }
 
   saveState();
   renderAll();
-  showToast('✓ Claim logged: +' + fmtUSD(+data.amount, true));
+  showToast('✓ Claim logged: +' + fmtUSD(+data.amount, true) + ' → Treasury');
 }
 
 function deleteClaimEvent(id) {
@@ -23031,8 +23042,8 @@ function updatePtPreview() {
   const preview = document.getElementById('ptPreview');
   if (type !== 'PT') { preview.classList.remove('show'); return; }
 
-  const current = parseFloat(document.getElementById('f_currentValue').value) || 0;
-  const redemption = parseFloat(document.getElementById('f_ptRedemption').value) || 0;
+  const current = parseLocaleNumber(document.getElementById('f_currentValue')?.value) || 0;
+  const redemption = parseLocaleNumber(document.getElementById('f_ptRedemption')?.value) || 0;
   const expiry = document.getElementById('f_ptExpiry').value;
 
   if (current <= 0 || redemption <= 0 || !expiry) {
@@ -23046,7 +23057,7 @@ function updatePtPreview() {
   const fixedGain = redemption - current;
   const fixedApr = (fixedGain / current) * (365 / daysToExpiry) * 100;
 
-  const entryYield = parseFloat(document.getElementById('f_entryYield').value);
+  const entryYield = parseLocaleNumber(document.getElementById('f_entryYield')?.value);
   let entryCompare = '';
   if (!isNaN(entryYield) && entryYield > 0) {
     const delta = fixedApr - entryYield;
@@ -23330,20 +23341,20 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
     chain:        getChainValue(),
     underlying:   document.getElementById('f_underlying').value,
     entryDate:    document.getElementById('f_entryDate').value,
-    deposited:    parseFloat(document.getElementById('f_deposited').value) || 0,
-    currentValue: parseFloat(document.getElementById('f_currentValue').value) || 0,
-    claimable:    parseFloat(document.getElementById('f_claimable').value) || 0,
+    deposited:    parseLocaleNumber(document.getElementById('f_deposited')?.value) || 0,
+    currentValue: parseLocaleNumber(document.getElementById('f_currentValue')?.value) || 0,
+    claimable:    parseLocaleNumber(document.getElementById('f_claimable')?.value) || 0,
     // v34.1: optional token amount info (for display in Holdings)
-    tokenAmount:  parseFloat(document.getElementById('f_tokenAmount')?.value) || null,
+    tokenAmount:  parseLocaleNumber(document.getElementById('f_tokenAmount')?.value) || null,
     tokenSymbol:  (document.getElementById('f_tokenSymbol')?.value || '').trim().toUpperCase() || null,
-    entryYield:   parseFloat(document.getElementById('f_entryYield').value) || null,
+    entryYield:   parseLocaleNumber(document.getElementById('f_entryYield')?.value) || null,
     rateJournal:  [...editingRateJournal],
     status:       document.getElementById('f_status').value,
     notes:        document.getElementById('f_notes').value,
     // PT-specific fields (only meaningful when type === 'PT')
     ptExpiry:     document.getElementById('f_ptExpiry').value || null,
-    ptTokens:     parseFloat(document.getElementById('f_ptTokens').value) || null,
-    ptRedemption: parseFloat(document.getElementById('f_ptRedemption').value) || null,
+    ptTokens:     parseLocaleNumber(document.getElementById('f_ptTokens')?.value) || null,
+    ptRedemption: parseLocaleNumber(document.getElementById('f_ptRedemption')?.value) || null,
     // Live tracking (v21 + v30 Pendle + v37.5 GMX)
     liveTracking: (() => {
       const mode = document.getElementById('f_trackingMode').value;
@@ -26348,10 +26359,10 @@ document.addEventListener('visibilitychange', () => {
           <input type="text" id="claim_note" placeholder="e.g. Weekly fee harvest from WETH/USDC LP">
         </div>
         <div class="field" style="grid-column: span 2;">
-          <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="claim_addToIdle" checked>
-            <span style="font-size: 12px;">Add amount to idle treasury automatically</span>
-          </label>
+          <div style="padding: 10px 14px; background: rgba(212,168,88,0.1); border: 1px solid var(--accent-deep); border-radius: 6px; font-size: 12px; color: var(--ink);">
+            💰 <strong>Treasury growth:</strong> заклеймленная награда автоматически уходит в Treasury (idle assets). Оттуда ты сам решаешь когда задеплоить в новую позицию через <em>Treasury → Deploy</em>.
+          </div>
+          <input type="checkbox" id="claim_addToIdle" checked style="display: none;">
         </div>
       </div>
     </div>
