@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.18.0</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.19.0</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -10504,6 +10504,11 @@ function renderTable() {
       <td class="cell-asset">
         <div class="asset-name">${escapeHTML(p.asset)}${p.status === 'closed' ? '<span class="closed-tag">Closed</span>' : ''}${p.status === 'rolled' ? '<span class="closed-tag" style="background: rgba(168,51,27,0.12); color: var(--neg);">Rolled</span>' : ''}${p.status === 'migrated' ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Перенесена в другой lending market">🔄 Migrated</span>' : ''}${p.rolledFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Created from rolled LP position">↩ from LP</span>' : ''}${p.migratedFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.10); color: #5C7CFA;" title="Migrated from another lending market">↩ from market</span>' : ''}${ptBadge}${rateBadge}${liveBadge}${rpcLiveBadge}${rangeBadge}${lpFeesBadge}</div>
         <div class="asset-meta">${escapeHTML(p.type)}${p.chain ? ' · ' + escapeHTML(p.chain) : ''}${p.rolledFromAsset ? ' · was ' + escapeHTML(p.rolledFromAsset) : ''}</div>
+        ${(p.lpComp && (+p.lpComp.t0usd + +p.lpComp.t1usd) > 0) ? (() => {
+          const a = +p.lpComp.t0usd || 0, b = +p.lpComp.t1usd || 0, t = a + b;
+          const pa = t > 0 ? (a / t * 100) : 0, pb = t > 0 ? (b / t * 100) : 0;
+          return `<div class="asset-meta" style="margin-top:3px; color:var(--ink-mute);" title="Учётный состав LP: ${escapeHTML(p.lpComp.t0sym)} ${fmtUSD(a, true)} · ${escapeHTML(p.lpComp.t1sym)} ${fmtUSD(b, true)}">⚖ ${escapeHTML(p.lpComp.t0sym)} ${pa.toFixed(0)}% · ${escapeHTML(p.lpComp.t1sym)} ${pb.toFixed(0)}%</div>`;
+        })() : ''}
       </td>
       <td data-label="Entry"><span style="font-size:13px;">${fmtDate(p.entryDate)}</span></td>
       <td data-label="Deposited" class="right"><span class="num-primary">${fmtUSD(c.deposited, true)}</span></td>
@@ -10649,6 +10654,7 @@ function renderTable() {
             }
             return '';
           })()}
+          ${(p.type === 'LP' || p.type === 'LP-Pendle') ? `<button class="action-btn-inline" onclick="window.openCompositionModal('${p.id}')" title="Задать состав LP — сколько USDC / сколько второго токена внутри позиции" style="background: rgba(91,124,250,0.08); border-color:#5C7CFA; color:#4D6EE0;">⚖ Состав</button>` : ''}
           <button class="icon-btn" data-edit="${p.id}" title="Edit">✎</button>
           <button class="icon-btn danger" data-del="${p.id}" title="Delete">×</button>
         </div>
@@ -19256,6 +19262,142 @@ function snoozePtExpiryAlert() {
   if (typeof showToast === 'function') showToast('PT expiry alert snoozed for 24 hours');
 }
 window.snoozePtExpiryAlert = snoozePtExpiryAlert;
+
+// === v37.19 — LP Composition editor ================================
+// Records how a two-token LP position is split between its tokens
+// (e.g. how much USDC vs cbBTC sits inside). Pure bookkeeping:
+// p.lpComp = {t0sym, t0usd, t1sym, t1usd, updatedAt}. Optionally syncs
+// Current Value to the composition total.
+window.openCompositionModal = function(positionId) {
+  const p = (state.positions || []).find(x => x.id === positionId);
+  if (!p) { alert('Позиция не найдена'); return; }
+
+  const cv = +p.currentValue || +p.deposited || 0;
+
+  // Parse token symbols from asset name ("CBBTC/USDC" -> ["CBBTC","USDC"])
+  const parts = String(p.asset || '').split(/[\/\-]/).map(s => s.trim()).filter(Boolean);
+  const guess0 = (p.lpComp && p.lpComp.t0sym) || parts[0] || 'TOKEN1';
+  const guess1 = (p.lpComp && p.lpComp.t1sym) || parts[1] || 'TOKEN2';
+  const init0 = (p.lpComp && +p.lpComp.t0usd) || +(cv / 2).toFixed(2);
+  const init1 = (p.lpComp && +p.lpComp.t1usd) || +(cv - cv / 2).toFixed(2);
+
+  const old = document.getElementById('lpCompModal'); if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg open';
+  modal.id = 'lpCompModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 560px;">
+      <div class="modal-header">
+        <h2>⚖️ Состав LP — ${escapeHTML(p.asset)}</h2>
+        <button class="btn" onclick="document.getElementById('lpCompModal').remove()">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="padding:12px; background:rgba(91,124,250,0.06); border-left:3px solid #5C7CFA; border-radius:4px; margin-bottom:16px; font-size:12px; line-height:1.5;">
+          Запиши, сколько долларов внутри позиции приходится на каждый токен. Это <strong>учётная разбивка</strong> — помогает видеть реальную BTC-экспозицию. Сумма сторон обычно ≈ текущая стоимость позиции <strong>${fmtUSD(cv, true)}</strong>.
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:end;">
+          <div>
+            <label style="font-size:11px; color:var(--ink-soft); display:block; margin-bottom:4px;">Токен 1 — символ</label>
+            <input type="text" id="lpc_sym0" value="${escapeHTML(guess0)}" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); font-family:inherit; text-transform:uppercase;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--ink-soft); display:block; margin-bottom:4px;">USD в токене 1</label>
+            <input type="text" inputmode="decimal" id="lpc_usd0" value="${init0.toFixed(2)}" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); font-family:'JetBrains Mono',monospace; text-align:right;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--ink-soft); display:block; margin-bottom:4px;">Токен 2 — символ</label>
+            <input type="text" id="lpc_sym1" value="${escapeHTML(guess1)}" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); font-family:inherit; text-transform:uppercase;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--ink-soft); display:block; margin-bottom:4px;">USD в токене 2</label>
+            <input type="text" inputmode="decimal" id="lpc_usd1" value="${init1.toFixed(2)}" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); font-family:'JetBrains Mono',monospace; text-align:right;">
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button type="button" class="btn" id="lpc_5050" style="font-size:11px; padding:4px 10px;">50 / 50</button>
+          <button type="button" class="btn" id="lpc_fitCV" style="font-size:11px; padding:4px 10px;">Подогнать под ${fmtUSD(cv, true)}</button>
+        </div>
+
+        <div id="lpc_preview" style="padding:12px; background:var(--surface-alt); border-radius:4px; margin-top:14px; font-size:12px;"></div>
+
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-size:12px; cursor:pointer;">
+          <input type="checkbox" id="lpc_syncCV" style="margin:0;">
+          <span>Обновить Current Value позиции на сумму состава (двигает NAV, если сумма ≠ текущей)</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button class="btn" onclick="document.getElementById('lpCompModal').remove()">Cancel</button>
+          <button class="btn btn-primary" id="lpc_save">Сохранить состав</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const g = id => document.getElementById(id);
+  const num = id => parseLocaleNumber(g(id).value) || 0;
+
+  const upd = () => {
+    const u0 = num('lpc_usd0'), u1 = num('lpc_usd1');
+    const tot = u0 + u1;
+    const s0 = (g('lpc_sym0').value || 'T1').toUpperCase();
+    const s1 = (g('lpc_sym1').value || 'T2').toUpperCase();
+    const pa = tot > 0 ? (u0 / tot * 100) : 0;
+    const pb = tot > 0 ? (u1 / tot * 100) : 0;
+    const diff = tot - cv;
+    const diffStr = Math.abs(diff) < 0.01
+      ? '<span style="color:var(--pos);">точно совпадает с Current Value</span>'
+      : `<span style="color:var(--accent-deep);">сумма ${fmtUSD(tot, true)} ${diff > 0 ? 'больше' : 'меньше'} Current Value на ${fmtUSD(Math.abs(diff), true)}</span>`;
+    g('lpc_preview').innerHTML =
+      `<div style="display:flex; height:18px; border-radius:4px; overflow:hidden; margin-bottom:8px; border:1px solid var(--border);">
+         <div style="width:${pa}%; background:#5C7CFA;"></div>
+         <div style="width:${pb}%; background:var(--accent-deep);"></div>
+       </div>
+       <strong>${escapeHTML(s0)}</strong> ${fmtUSD(u0, true)} (${pa.toFixed(1)}%) · <strong>${escapeHTML(s1)}</strong> ${fmtUSD(u1, true)} (${pb.toFixed(1)}%)<br>
+       Сумма: <strong>${fmtUSD(tot, true)}</strong> · ${diffStr}`;
+  };
+  ['lpc_usd0', 'lpc_usd1', 'lpc_sym0', 'lpc_sym1'].forEach(id => g(id).addEventListener('input', upd));
+
+  g('lpc_5050').addEventListener('click', e => {
+    e.preventDefault();
+    g('lpc_usd0').value = (cv / 2).toFixed(2);
+    g('lpc_usd1').value = (cv - cv / 2).toFixed(2);
+    upd();
+  });
+  g('lpc_fitCV').addEventListener('click', e => {
+    e.preventDefault();
+    const u0 = num('lpc_usd0'), u1 = num('lpc_usd1'), t = u0 + u1;
+    if (t > 0) { g('lpc_usd0').value = (cv * u0 / t).toFixed(2); g('lpc_usd1').value = (cv * u1 / t).toFixed(2); }
+    else { g('lpc_usd0').value = (cv / 2).toFixed(2); g('lpc_usd1').value = (cv - cv / 2).toFixed(2); }
+    upd();
+  });
+  upd();
+
+  g('lpc_save').addEventListener('click', () => {
+    const s0 = (g('lpc_sym0').value || '').trim().toUpperCase();
+    const s1 = (g('lpc_sym1').value || '').trim().toUpperCase();
+    const u0 = num('lpc_usd0'), u1 = num('lpc_usd1');
+    if (!s0 || !s1) { alert('Впиши оба символа токенов'); return; }
+    if (u0 < 0 || u1 < 0) { alert('Суммы не могут быть отрицательными'); return; }
+    const tot = u0 + u1;
+    p.lpComp = { t0sym: s0, t0usd: +u0.toFixed(2), t1sym: s1, t1usd: +u1.toFixed(2), updatedAt: new Date().toISOString() };
+    let cvNote = '';
+    if (g('lpc_syncCV').checked && tot > 0) {
+      const before = +p.currentValue || 0;
+      p.currentValue = +tot.toFixed(2);
+      p.lastCvUpdateAt = new Date().toISOString();
+      cvNote = ` · CV ${fmtUSD(before, true)}→${fmtUSD(tot, true)}`;
+    }
+    if (typeof logAudit === 'function') logAudit('lp-composition', { target: p.asset + ' (' + p.protocol + ')', before: null, after: tot, source: 'manual', note: `${s0} ${fmtUSD(u0, true)} / ${s1} ${fmtUSD(u1, true)}${cvNote}` });
+    if (typeof logTx === 'function') logTx('edit', p, { note: `LP состав: ${s0} ${fmtUSD(u0, true)} / ${s1} ${fmtUSD(u1, true)}${cvNote}` });
+    saveState();
+    const m = document.getElementById('lpCompModal'); if (m) m.remove();
+    renderAll();
+    showToast('Состав LP сохранён');
+  });
+};
 
 // v37.1: REBALANCE — move capital between positions in single atomic action
 function openRebalanceModal(sourcePositionId) {
