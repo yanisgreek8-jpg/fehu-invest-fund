@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Fehu Invest Fund · Portfolio Cockpit · build v37.20.0 (top-up funding in edit mode) -->
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
@@ -9,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.19.0</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.20.0</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -7938,11 +7939,11 @@
             <!-- Idle treasury + Savings options injected here dynamically -->
             <div id="f_idleOptions" style="display:flex; flex-direction:column; gap:8px;"></div>
           </div>
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; padding:8px 12px; background:var(--surface-alt); border-radius:4px;">
+          <div id="f_fundingFillRow" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; padding:8px 12px; background:var(--surface-alt); border-radius:4px;">
             <span style="font-size:12px; color:var(--ink-soft);">Выбрано из источников: <strong id="f_fundingTotal" style="font-family:'JetBrains Mono',monospace; color:var(--accent-deep);">$0.00</strong></span>
             <button type="button" class="btn" id="f_fundingFillBtn" style="font-size:11px; padding:4px 10px;">↧ В Deployed</button>
           </div>
-          <div class="hint">Можно брать частями из казны и из Savings в одну позицию — суммы спишутся при сохранении, NAV сохранится. «Новый капитал» = внешние деньги, ниоткуда не списываются.</div>
+          <div class="hint" id="f_fundingHint">Можно брать частями из казны и из Savings в одну позицию — суммы спишутся при сохранении, NAV сохранится. «Новый капитал» = внешние деньги, ниоткуда не списываются.</div>
         </div>
 
         <div class="field">
@@ -23275,6 +23276,8 @@ function openModal(id) {
   toggleLiveTrackingSection();
   if (typeof toggleGmxMarketSection === 'function') toggleGmxMarketSection();
   if (typeof renderFundingSourceOptions === 'function') renderFundingSourceOptions();
+  // v37.20.0 — funding block adapts to NEW vs EDIT (top-up) mode
+  if (typeof fehuSetFundingMode === 'function') fehuSetFundingMode(!!id);
   updatePtPreview();
   renderRateList();
   // Default date for new rate entry: today
@@ -23288,6 +23291,23 @@ function openModal(id) {
 // When opening "+ New position" form, list available idle assets so user can
 // choose to deploy from idle treasury (auto-deduct on submit) vs adding new
 // external capital. Solves the workflow: "I have $2750 in idle, deploy it."
+// v37.20.0 — adapt the funding block UI to NEW vs EDIT (top-up) mode.
+function fehuSetFundingMode(isEdit) {
+  const fillBtn = document.getElementById('f_fundingFillBtn');
+  const hint = document.getElementById('f_fundingHint');
+  const label = document.querySelector('#f_fundingSourceField label');
+  if (label) label.textContent = isEdit
+    ? 'Источник капитала / Top-up — пополнить позицию'
+    : 'Источник капитала / Funding source';
+  // "↧ В Deployed" OVERWRITES the Deployed field — only valid for a brand-new position.
+  // In edit mode the sources are ADDED on save, so hide the button to avoid double-counting.
+  if (fillBtn) fillBtn.style.display = isEdit ? 'none' : '';
+  if (hint) hint.textContent = isEdit
+    ? 'Top-up: суммы из казны / Savings ПРИБАВЯТСЯ к Deployed и Current Value этой позиции при сохранении. Списываются из бакетов, NAV сохранится. Оставь поля пустыми, если просто правишь позицию.'
+    : 'Можно брать частями из казны и из Savings в одну позицию — суммы спишутся при сохранении, NAV сохранится. «Новый капитал» = внешние деньги, ниоткуда не списываются.';
+}
+window.fehuSetFundingMode = fehuSetFundingMode;
+
 function recomputeFundingTotal() {
   let total = 0;
   document.querySelectorAll('#f_fundingSourceContainer .f_srcAmt').forEach(inp => {
@@ -23724,6 +23744,81 @@ function logTx(action, position, extra = {}) {
   if (state.transactions.length > 500) state.transactions.length = 500;
 }
 
+/* ---------- v37.20.0 — Shared funding-source engine (used by NEW position and EDIT top-up) ----------
+   Reads the multi-source "Источник капитала" inputs, validates against available
+   balances (two-pass: validate ALL, then apply), and on apply deducts USD from each
+   idle-treasury / Savings bucket (proportional units, avg-cost preserved on remainder).
+   Returns funded total + descriptors so the caller can attach to a position and log it.
+   NAV is preserved because every dollar pulled from a bucket lands 1:1 in the position. */
+function fehuCollectFundingPlan() {
+  if (typeof ensureSavingsState === 'function') ensureSavingsState();
+  const srcInputs = Array.from(document.querySelectorAll('#f_fundingSourceContainer .f_srcAmt'));
+  const plan = [];
+  for (const inp of srcInputs) {
+    const src = inp.getAttribute('data-src');
+    const amt = parseLocaleNumber(inp.value) || 0;
+    if (amt <= 0) continue;
+    if (src === 'new') { plan.push({ kind: 'new', amt }); continue; }
+    if (src.indexOf('idle:') === 0) {
+      const item = (state.idleTreasury || []).find(x => x.id === src.slice(5));
+      if (!item) continue;
+      if (amt > (+item.usdValue || 0) + 0.01) {
+        alert(`Нельзя взять ${fmtUSD(amt, true)} — в казне «${item.asset}» только ${fmtUSD(item.usdValue, true)}.`);
+        return { ok: false, plan: [] };
+      }
+      plan.push({ kind: 'idle', amt, item });
+    } else if (src.indexOf('sav:') === 0) {
+      const h = (state.savings || []).find(x => x.id === src.slice(4));
+      if (!h) continue;
+      const price = (+h.currentPrice || +h.avgCost || 0);
+      const curUsd = (+h.amount || 0) * price;
+      if (amt > curUsd + 0.01) {
+        alert(`Нельзя взять ${fmtUSD(amt, true)} — в Savings «${h.asset}» только ${fmtUSD(curUsd, true)}.`);
+        return { ok: false, plan: [] };
+      }
+      plan.push({ kind: 'sav', amt, h, price });
+    }
+  }
+  return { ok: true, plan };
+}
+
+function fehuApplyFundingPlan(plan, targetAsset) {
+  const fundedParts = [];
+  const fundedSources = [];
+  for (const p of plan) {
+    if (p.kind === 'new') {
+      fundedParts.push(`новый капитал ${fmtUSD(p.amt, true)}`);
+      fundedSources.push({ kind: 'new', usd: p.amt });
+    } else if (p.kind === 'idle') {
+      const item = p.item;
+      const ratio = p.amt / item.usdValue;
+      const units = item.units * ratio;
+      item.units -= units;
+      item.usdValue -= p.amt;
+      item.updatedAt = new Date().toISOString();
+      if (item.usdValue < 0.005) state.idleTreasury = state.idleTreasury.filter(x => x.id !== item.id);
+      fundedParts.push(`${units.toFixed(4)} ${item.asset} из казны (${fmtUSD(p.amt, true)})`);
+      fundedSources.push({ kind: 'idle', id: item.id, asset: item.asset, usd: p.amt, units });
+      logTx('deploy', null, { note: `Deployed ${units.toFixed(4)} ${item.asset} (${fmtUSD(p.amt, true)}) from idle into ${targetAsset}` });
+    } else if (p.kind === 'sav') {
+      const h = p.h, price = p.price;
+      const unitsOut = price > 0 ? p.amt / price : 0;
+      h.amount = Math.max(0, (+h.amount || 0) - unitsOut);
+      h.updatedAt = new Date().toISOString();
+      const remUsd = (+h.amount || 0) * price;
+      if (remUsd < 0.005) state.savings = state.savings.filter(x => x.id !== h.id);
+      fundedParts.push(`${unitsOut.toFixed(4)} ${h.asset} из Savings (${fmtUSD(p.amt, true)})`);
+      fundedSources.push({ kind: 'sav', id: h.id, asset: h.asset, usd: p.amt, units: unitsOut, avgCost: +h.avgCost || 0 });
+      logTx('deploy', null, { note: `Deployed ${unitsOut.toFixed(4)} ${h.asset} (${fmtUSD(p.amt, true)}) from Savings into ${targetAsset}` });
+      if (typeof logAudit === 'function') {
+        logAudit('savings-deploy', { target: h.asset + ' → ' + targetAsset, before: p.amt + remUsd, after: remUsd, source: 'manual', note: `${unitsOut.toFixed(4)} ${h.asset} (${fmtUSD(p.amt, true)})` });
+      }
+    }
+  }
+  const total = fundedSources.reduce((s, x) => s + (+x.usd || 0), 0);
+  return { total, fundedParts, fundedSources };
+}
+
 /* ---------- Position form submit ---------- */
 document.getElementById('posForm').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -23809,6 +23904,36 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
     const idx = state.positions.findIndex(p => p.id === id);
     if (idx >= 0) {
       const prev = state.positions[idx];
+
+      // v37.20.0 — Top-up existing position from funding sources (idle / Savings / new capital).
+      // Mirrors the new-position multi-source funding, but ADDS to THIS position instead of
+      // creating one. NAV preserved: each bucket shrinks by exactly the USD added to both
+      // deposited (cost basis) and currentValue. Two-pass: validate ALL first, then apply —
+      // an overdraw aborts the entire save with nothing mutated.
+      let fehuTopUp = 0;
+      {
+        const fp = fehuCollectFundingPlan();
+        if (!fp.ok) return;
+        if (fp.plan.length) {
+          const applied = fehuApplyFundingPlan(fp.plan, payload.asset);
+          fehuTopUp = applied.total;
+          payload.deposited    = (+payload.deposited    || 0) + fehuTopUp;
+          payload.currentValue = (+payload.currentValue || 0) + fehuTopUp;
+          payload.fundedSources = (Array.isArray(prev.fundedSources) ? prev.fundedSources : []).concat(applied.fundedSources);
+          payload.notes = (payload.notes ? payload.notes + ' · ' : '') + 'Top-up ' + fmtUSD(fehuTopUp, true) + ': ' + applied.fundedParts.join(' + ');
+          if (typeof logAudit === 'function') {
+            logAudit('position-topup', {
+              target: payload.asset + ' (' + payload.protocol + ')',
+              before: +prev.deposited || 0,
+              after: +payload.deposited || 0,
+              source: 'manual',
+              note: '+' + fmtUSD(fehuTopUp, true) + ' from ' + applied.fundedParts.join(' + ')
+            });
+          }
+          showToast('↑ Top-up ' + fmtUSD(fehuTopUp, true) + ' → ' + payload.asset);
+        }
+      }
+
       const merged = { ...prev, ...payload };
       state.positions[idx] = merged;
       // log: close vs update
@@ -23860,7 +23985,10 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
       }
       // v35.6: If currentValue or claimable changed manually, mark today's snapshot
       const prevCV = +prev.currentValue || 0;
-      const newCV = +payload.currentValue || 0;
+      // v37.20.0: exclude the top-up inflow from change/anomaly/smoothing detection —
+      // a deposit is not a price move or yield, so it must not trigger anomaly toasts
+      // or get smeared across the income chart. Pure top-up → newCV === prevCV → block skipped.
+      const newCV = (+payload.currentValue || 0) - fehuTopUp;
       const prevClaim = +prev.claimable || 0;
       const newClaim = +payload.claimable || 0;
       if (Math.abs(prevCV - newCV) > 0.01 || Math.abs(prevClaim - newClaim) > 0.01) {
