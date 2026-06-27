@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- Fehu Invest Fund · Portfolio Cockpit · build v37.20.0 (top-up funding in edit mode) -->
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
@@ -10,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.20.0</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.21.0</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -7981,6 +7980,16 @@
           <textarea id="f_notes" placeholder="Hedge details, exit conditions, expiry date, observations..."></textarea>
         </div>
 
+        <div class="field form-full">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:500;">
+            <input type="checkbox" id="f_profitFunded" style="width:auto; margin:0;">
+            <span>💎 Из прибыли / house money</span>
+          </label>
+          <div style="font-size:12px; color:var(--ink-mute); margin-top:4px;">
+            Принцип позиции профинансирован реализованной прибылью. PnL будет зелёным даже при отдаче цены (это накопление, не убыток). Авто-проставляется при реинвесте дохода в позицию.
+          </div>
+        </div>
+
         <!-- Live tracking block — visible only for LP/Lend/Borrow positions -->
         <div class="live-tracking-fieldset form-full" id="liveTrackingFieldset" style="display:none;">
           <div class="lt-legend">⚡ Live tracking · optional</div>
@@ -10364,6 +10373,11 @@ function renderTable() {
     const protoColor = resolveColor(PROTOCOL_COLORS[p.protocol] || 'var(--c8)');
     const totalCurrent = c.current + c.claimable;
 
+    // Profit-funded ("house money") badge — principal came from realized profit, so PnL is shown green even on price give-back
+    const profitBadge = p.profitFunded
+      ? `<span class="closed-tag" style="background: rgba(45,138,90,0.14); color: var(--pos);" title="Принцип этой позиции профинансирован реализованной прибылью (house money). Уменьшение из-за цены — это отдача нереализованной прибыли / накопление, а не реальный убыток.">💎 из прибыли</span>`
+      : '';
+
     // PT badge with progress bar
     let ptBadge = '';
     if (p.type === 'PT' && p.ptExpiry) {
@@ -10503,7 +10517,7 @@ function renderTable() {
         </div>
       </td>
       <td class="cell-asset">
-        <div class="asset-name">${escapeHTML(p.asset)}${p.status === 'closed' ? '<span class="closed-tag">Closed</span>' : ''}${p.status === 'rolled' ? '<span class="closed-tag" style="background: rgba(168,51,27,0.12); color: var(--neg);">Rolled</span>' : ''}${p.status === 'migrated' ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Перенесена в другой lending market">🔄 Migrated</span>' : ''}${p.rolledFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Created from rolled LP position">↩ from LP</span>' : ''}${p.migratedFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.10); color: #5C7CFA;" title="Migrated from another lending market">↩ from market</span>' : ''}${ptBadge}${rateBadge}${liveBadge}${rpcLiveBadge}${rangeBadge}${lpFeesBadge}</div>
+        <div class="asset-name">${escapeHTML(p.asset)}${p.status === 'closed' ? '<span class="closed-tag">Closed</span>' : ''}${p.status === 'rolled' ? '<span class="closed-tag" style="background: rgba(168,51,27,0.12); color: var(--neg);">Rolled</span>' : ''}${p.status === 'migrated' ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Перенесена в другой lending market">🔄 Migrated</span>' : ''}${p.rolledFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.12); color: #5C7CFA;" title="Created from rolled LP position">↩ from LP</span>' : ''}${p.migratedFrom ? '<span class="closed-tag" style="background: rgba(91,124,250,0.10); color: #5C7CFA;" title="Migrated from another lending market">↩ from market</span>' : ''}${ptBadge}${rateBadge}${liveBadge}${rpcLiveBadge}${rangeBadge}${lpFeesBadge}${profitBadge}</div>
         <div class="asset-meta">${escapeHTML(p.type)}${p.chain ? ' · ' + escapeHTML(p.chain) : ''}${p.rolledFromAsset ? ' · was ' + escapeHTML(p.rolledFromAsset) : ''}</div>
         ${(p.lpComp && (+p.lpComp.t0usd + +p.lpComp.t1usd) > 0) ? (() => {
           const a = +p.lpComp.t0usd || 0, b = +p.lpComp.t1usd || 0, t = a + b;
@@ -10517,9 +10531,11 @@ function renderTable() {
         <span class="num-primary">${fmtUSD(totalCurrent, true)}</span>
         ${c.claimable > 0 ? `<div class="num-sub">+ ${fmtUSD(c.claimable)} reward</div>` : ''}
       </td>
-      <td data-label="PnL" class="right ${c.pnl >= 0 ? 'pos' : 'neg'}">
+      <td data-label="PnL" class="right ${(p.profitFunded || c.pnl >= 0) ? 'pos' : 'neg'}">
         <span class="num-primary">${(c.pnl >= 0 ? '+' : '−')}${fmtUSD(Math.abs(c.pnl), true).replace('-','')}</span>
-        <div class="num-sub ${c.pnl >= 0 ? 'pos' : 'neg'}">${fmtPct(c.pnlPct)}</div>
+        ${(p.profitFunded && c.pnl < 0)
+          ? `<div class="num-sub" style="color:var(--ink-mute)" title="Принцип из реализованной прибыли (house money). Минус — это отдача цены / накопление, не реальный убыток.">💎 из прибыли · накопление</div>`
+          : `<div class="num-sub ${c.pnl >= 0 ? 'pos' : 'neg'}">${fmtPct(c.pnlPct)}</div>`}
       </td>
       <td data-label="APR" class="right">
         <span class="num-primary ${c.apr >= 0 ? 'pos' : 'neg'}">${c.apr.toFixed(2)}%</span>
@@ -12596,6 +12612,8 @@ document.getElementById('claimConfirmBtn').addEventListener('click', () => {
     // Add to the same position's principal
     p.deposited = (+p.deposited || 0) + amount;
     p.currentValue = (+p.currentValue || 0) + amount;
+    // v37.21: realized profit redeployed into this position → it's now house money
+    p.profitFunded = true;
     txNote = `Claimed ${fmtUSD(amount, true)} → reinvested into same position`;
   } else if (claimRoute === 'position') {
     // Move to another existing position
@@ -12605,6 +12623,8 @@ document.getElementById('claimConfirmBtn').addEventListener('click', () => {
     target.deposited = (+target.deposited || 0) + amount;
     target.currentValue = (+target.currentValue || 0) + amount;
     target.updatedAt = new Date().toISOString();
+    // v37.21: realized profit redeployed into target → it's now house money
+    target.profitFunded = true;
     txNote = `Claimed ${fmtUSD(amount, true)} → deployed into ${target.protocol} · ${target.asset}`;
   } else if (claimRoute === 'treasury') {
     if (claimTreasuryMode === 'split') {
@@ -12679,6 +12699,8 @@ document.getElementById('claimConfirmBtn').addEventListener('click', () => {
     document.getElementById('f_deposited').value = amount.toFixed(2);
     document.getElementById('f_currentValue').value = amount.toFixed(2);
     document.getElementById('f_notes').value = `Funded from claim on ${p.protocol} · ${p.asset} (${fmtUSD(amount, true)})`;
+    // v37.21: new position funded entirely from realized profit → pre-check house-money flag
+    { const pf = document.getElementById('f_profitFunded'); if (pf) pf.checked = true; }
     // Log the claim itself — v37.14.5: include amount so Rewards Ledger sees it
     logTx('claim', p, { amount: amount, note: `Claimed ${fmtUSD(amount, true)} → opening new position` });
     showToast('Claim recorded · fill in the new position');
@@ -23236,6 +23258,8 @@ function openModal(id) {
       // v37.5: GMX market selector for GM positions
       setVal('f_gmxMarket', lt.gmxMarket || p.gmxMarket || '');
       if (typeof toggleGmxMarketSection === 'function') toggleGmxMarketSection();
+      // v37.21: profit-funded ("house money") flag
+      { const pf = document.getElementById('f_profitFunded'); if (pf) pf.checked = !!p.profitFunded; }
       // Load rate journal into draft
       editingRateJournal = Array.isArray(p.rateJournal) ? [...p.rateJournal] : [];
       document.getElementById('deleteBtn').style.display = 'inline-block';
@@ -23264,6 +23288,8 @@ function openModal(id) {
     if (hintEl) hintEl.innerHTML = 'Auto: Get price from CoinGecko · Manual: Enter your own price (useful for new/unlisted tokens or override)';
     // v37.5: reset GMX market
     setVal('f_gmxMarket', '');
+    // v37.21: reset profit-funded flag
+    { const pf = document.getElementById('f_profitFunded'); if (pf) pf.checked = false; }
     // v37.18: reset funding source amounts (multi-source)
     document.querySelectorAll('#f_fundingSourceContainer .f_srcAmt').forEach(inp => { inp.value = ''; });
     if (typeof recomputeFundingTotal === 'function') recomputeFundingTotal();
@@ -23840,6 +23866,8 @@ document.getElementById('posForm').addEventListener('submit', (e) => {
     rateJournal:  [...editingRateJournal],
     status:       document.getElementById('f_status').value,
     notes:        document.getElementById('f_notes').value,
+    // v37.21: profit-funded ("house money") flag — PnL shown green even on price give-back
+    profitFunded: !!(document.getElementById('f_profitFunded')?.checked),
     // PT-specific fields (only meaningful when type === 'PT')
     ptExpiry:     document.getElementById('f_ptExpiry').value || null,
     ptTokens:     parseLocaleNumber(document.getElementById('f_ptTokens')?.value) || null,
