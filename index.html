@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fehu Fund">
 <meta name="theme-color" content="#0B1226">
-<title>Fehu Invest Fund · Portfolio Cockpit v37.21.0</title>
+<title>Fehu Invest Fund · Portfolio Cockpit v37.23.0</title>
 
 <!-- Favicon: Fehu rune (gold on dark) — v30.4 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230B1226'/%3E%3Cg fill='none' stroke='%23D4A858' stroke-width='8' stroke-linecap='round'%3E%3Cline x1='32' y1='18' x2='32' y2='82'/%3E%3Cline x1='32' y1='32' x2='68' y2='22'/%3E%3Cline x1='32' y1='52' x2='68' y2='42'/%3E%3C/g%3E%3C/svg%3E">
@@ -7766,12 +7766,13 @@
     <div class="field" style="margin-bottom: 18px;">
       <label>Purpose / Tag</label>
       <select id="wf_purpose">
-        <option value="profit-take">Profit taking</option>
-        <option value="personal">Personal expenses</option>
-        <option value="business">Business / operating</option>
-        <option value="cold-storage">Moved to cold wallet</option>
-        <option value="reinvest-elsewhere">Reinvested outside fund</option>
-        <option value="other">Other</option>
+        <option value="profit-take">💚 Фикс прибыли (Profit taking)</option>
+        <option value="stop-loss">🔴 Фикс убытка (Stop-loss)</option>
+        <option value="personal">Личные расходы (Personal)</option>
+        <option value="business">Бизнес / операционка (Business)</option>
+        <option value="cold-storage">В холодный кошелёк (Cold wallet)</option>
+        <option value="reinvest-elsewhere">Реинвест вне фонда (External reinvest)</option>
+        <option value="other">Другое (Other)</option>
       </select>
     </div>
 
@@ -13441,12 +13442,13 @@ function renderDistributions() {
     </div>`;
   } else {
     const PURPOSE_LABELS = {
-      'profit-take': 'Profit',
-      'personal': 'Personal',
-      'business': 'Business',
-      'cold-storage': 'Cold storage',
-      'reinvest-elsewhere': 'External reinvest',
-      'other': 'Other'
+      'profit-take': '💚 Фикс прибыли',
+      'stop-loss': '🔴 Фикс убытка',
+      'personal': 'Личные',
+      'business': 'Бизнес',
+      'cold-storage': 'Холодный кошелёк',
+      'reinvest-elsewhere': 'Реинвест вне фонда',
+      'other': 'Другое'
     };
 
     dists.forEach(d => {
@@ -20731,6 +20733,8 @@ window.editClaimEvent = function(id) {
   const title = document.querySelector('#claimLedgerModal .claim-modal-title');
   if (title) title.innerHTML = 'Edit <em>claim</em>';
 
+  // v37.22: bind footer buttons directly so they work even if init-time listeners failed
+  bindClaimModalButtons();
   modal.classList.add('open');
 };
 
@@ -20770,9 +20774,23 @@ function openClaimLedgerModal(presetPositionId = null) {
     }
   }
 
+  // v37.22: bind footer buttons directly so they work even if init-time listeners failed
+  bindClaimModalButtons();
   modal.classList.add('open');
 }
 window.openClaimLedgerModal = openClaimLedgerModal;
+
+// v37.22: (re)bind the claim modal footer buttons via .onclick. Idempotent — safe to call
+// on every modal open. Makes buttons work regardless of whether setupRewardsLedger ran.
+function bindClaimModalButtons() {
+  const closeBtn = document.getElementById('claimModalClose');
+  const cancelBtn = document.getElementById('claimModalCancel');
+  const saveBtn = document.getElementById('claimModalSave');
+  if (closeBtn) closeBtn.onclick = closeClaimModal;
+  if (cancelBtn) cancelBtn.onclick = closeClaimModal;
+  if (saveBtn && typeof window.saveClaimFromModal === 'function') saveBtn.onclick = window.saveClaimFromModal;
+}
+window.bindClaimModalButtons = bindClaimModalButtons;
 
 function closeClaimModal() {
   _editingClaimId = null;
@@ -20782,6 +20800,7 @@ function closeClaimModal() {
   if (title) title.innerHTML = 'Log <em>claim</em> event';
   document.getElementById('claimLedgerModal')?.classList.remove('open');
 }
+window.closeClaimModal = closeClaimModal;
 
 /* ===================================================================
    STRATEGY DETAILS MODAL (v31) — popup with protocol info + open link
@@ -21079,10 +21098,11 @@ function setupRewardsLedger() {
   document.getElementById('rewardsAddClaimBtn')?.addEventListener('click', () => openClaimLedgerModal());
   document.getElementById('rewardsExportClaimsBtn')?.addEventListener('click', exportClaimsCsv);
 
-  // Claim modal
+  // Claim modal — buttons are also re-bound in openClaimLedgerModal/editClaimEvent
+  // via .onclick, so they work even if this init step ever fails (v37.22 robustness fix).
   document.getElementById('claimModalClose')?.addEventListener('click', closeClaimModal);
   document.getElementById('claimModalCancel')?.addEventListener('click', closeClaimModal);
-  document.getElementById('claimModalSave')?.addEventListener('click', (ev) => {
+  window.saveClaimFromModal = function(ev) {
     // v37.16.8: visible diagnostic — always log so we see what's happening
     console.log('[Claim save] Button clicked, version v37.16.8');
     ev.preventDefault();
@@ -21183,7 +21203,9 @@ function setupRewardsLedger() {
       console.error('[Claim save] Error:', err);
       alert('Ошибка при сохранении: ' + (err.message || err) + '\n\nПроверь консоль (F12) для деталей.');
     }
-  });
+  };
+  // Bind save now if button exists (also re-bound on modal open)
+  { const sb = document.getElementById('claimModalSave'); if (sb) sb.onclick = window.saveClaimFromModal; }
 
   // Close modal on Escape
   document.addEventListener('keydown', (e) => {
